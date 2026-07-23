@@ -87,7 +87,7 @@
 </div>
 <div class="nav">
     <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">仪表盘</a>
-    <a href="{{ url_for('customers') }}" class="{{ 'active' if request.endpoint in ('customers', 'customer_add', 'customer_edit', 'sites', 'site_add', 'site_edit', 'pages', 'page_add', 'page_edit') }}">客户 & 站点</a>
+    <a href="{{ url_for('customers') }}" class="{{ 'active' if request.endpoint in ('customers', 'customer_add', 'customer_edit', 'site_add', 'site_edit', 'page_add', 'page_edit') }}">客户 & 站点</a>
     <a href="{{ url_for('alerts') }}" class="{{ 'active' if request.endpoint in ('alerts', 'diff_view') }}">告警管理</a>
     <a href="{{ url_for('detection_logs') }}" class="{{ 'active' if request.endpoint == 'detection_logs' }}">检测日志</a>
     <a href="{{ url_for('reports') }}" class="{{ 'active' if request.endpoint in ('reports', 'report_view') }}">报告</a>

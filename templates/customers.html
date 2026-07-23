@@ -1,33 +1,248 @@
 {% extends "base.html" %}
-{% block title %}客户管理{% endblock %}
+{% block title %}客户 & 站点{% endblock %}
+{% block extra_head %}
+<style>
+    .resource-layout { display: flex; height: calc(100vh - 180px); min-height: 550px; margin: -24px; }
+    .resource-sidebar { width: 260px; background: #f8f9fa; border-right: 1px solid #e0e0e0; overflow-y: auto; flex-shrink: 0; }
+    .resource-sidebar .sidebar-header { padding: 14px 16px; border-bottom: 1px solid #e0e0e0; background: #fff; position: sticky; top: 0; z-index: 1; }
+    .resource-sidebar .sidebar-header .btn { width: 100%; }
+    .resource-sidebar .cust-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee; transition: all 0.15s; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .resource-sidebar .cust-item:hover { background: #e8f0fe; }
+    .resource-sidebar .cust-item.active { background: #e8f0fe; color: #1a73e8; font-weight: 600; border-left: 3px solid #1a73e8; padding-left: 13px; }
+    .resource-sidebar .cust-item .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+    .resource-sidebar .cust-item.active .dot { background: #1a73e8; }
+    .resource-sidebar .cust-item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .resource-sidebar .cust-item .count { font-size: 11px; color: #999; flex-shrink: 0; }
+    .resource-sidebar .cust-item.active .count { color: #1a73e8; }
+    .resource-sidebar .sidebar-empty { padding: 30px 16px; text-align: center; color: #999; font-size: 13px; }
+
+    .resource-main { flex: 1; overflow-y: auto; padding: 24px; }
+    .resource-main .cust-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #e8e8e8; }
+    .resource-main .cust-header h2 { font-size: 20px; color: #1a237e; }
+    .resource-main .cust-header .cust-desc { color: #666; font-size: 13px; margin-top: 4px; }
+    .resource-main .cust-header .btn-group { flex-shrink: 0; }
+
+    .site-card { border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+    .site-card .site-header { background: #f8f9fa; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e8e8e8; }
+    .site-card .site-header .site-info { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .site-card .site-header .site-name { font-weight: 600; font-size: 14px; }
+    .site-card .site-header .site-domain { color: #666; font-size: 12px; font-family: monospace; }
+    .site-card .site-header .btn-group { flex-shrink: 0; }
+
+    .page-table { width: 100%; border-collapse: collapse; }
+    .page-table th { background: #fff; padding: 8px 16px; font-size: 11px; text-transform: none; letter-spacing: 0; border-bottom: 1px solid #eee; }
+    .page-table td { padding: 8px 16px; font-size: 13px; border-bottom: 1px solid #f5f5f5; }
+    .page-table tr:last-child td { border-bottom: none; }
+    .page-table .page-url { color: #1a73e8; font-size: 12px; font-family: monospace; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; vertical-align: middle; }
+    .page-table .page-actions { white-space: nowrap; }
+
+    .site-card-footer { padding: 10px 16px; border-top: 1px solid #f0f0f0; background: #fafafa; text-align: center; }
+
+    .resource-main .no-selection { display: flex; align-items: center; justify-content: center; height: 100%; color: #999; font-size: 14px; }
+    .resource-main .empty-customer { text-align: center; padding: 40px; color: #999; }
+    .resource-main .empty-sites { text-align: center; padding: 24px; color: #999; font-size: 13px; }
+
+    .add-site-btn { color: #1a73e8; text-decoration: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+
+    /* Modal styles */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 1000; justify-content: center; align-items: flex-start; padding-top: 80px; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: #fff; border-radius: 8px; width: 520px; max-width: 90vw; box-shadow: 0 8px 30px rgba(0,0,0,0.2); max-height: 80vh; display: flex; flex-direction: column; }
+    .modal-header { padding: 14px 20px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h3 { font-size: 16px; color: #1a237e; }
+    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; padding: 0; line-height: 1; }
+    .modal-close:hover { color: #333; }
+    .modal-body { padding: 20px; overflow-y: auto; }
+    .modal-body .form-group { margin-bottom: 14px; }
+    .modal-body .form-group label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 13px; color: #555; }
+    .modal-body .form-group input, .modal-body .form-group textarea, .modal-body .form-group select { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+    .modal-body .form-group input:focus, .modal-body .form-group textarea:focus, .modal-body .form-group select:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+    .modal-body .form-group textarea { min-height: 60px; resize: vertical; font-family: inherit; }
+    .modal-body .btn-group { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .modal-body .text-muted { color: #999; font-size: 11px; margin-top: 2px; display: block; }
+    .modal-body .form-group input[type="checkbox"] { width: auto; margin-right: 6px; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-title">
-    客户管理
-    <a href="{{ url_for('customer_add') }}" class="btn btn-primary">+ 添加客户</a>
-</div>
-{% if customers %}
-<table>
-    <tr><th>客户名称</th><th>描述</th><th>站点数</th><th>创建时间</th><th>操作</th></tr>
-    {% for c in customers %}
-    <tr>
-        <td><strong>{{ c.name }}</strong></td>
-        <td class="text-muted">{{ c.description or '-' }}</td>
-        <td>{{ c.site_count }}</td>
-        <td>{{ format_dt(c.created_at) }}</td>
-        <td>
-            <a href="{{ url_for('sites', cid=c.id) }}" class="btn btn-sm btn-outline">站点</a>
-            <a href="{{ url_for('customer_edit', cid=c.id) }}" class="btn btn-sm btn-outline">编辑</a>
-            <form method="POST" action="{{ url_for('customer_delete', cid=c.id) }}" style="display:inline" onsubmit="return confirm('删除客户将同时删除其下所有站点和页面，确定？');">
-                <button class="btn btn-sm btn-danger">删除</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-{% else %}
-<div class="empty-state">
-    <div class="icon">&#128101;</div>
-    <p>还没有添加客户，点击上方按钮开始</p>
-</div>
+{% set fms = get_flashed_messages(with_categories=true) %}
+{% if fms %}
+{% for cat, m in fms %}<div class="alert-box {{ 'alert-danger' if cat == 'danger' else 'alert-success' if cat == 'success' else 'alert-info' }}" style="margin: 0 24px; position: relative; z-index: 1;">{{ m }}</div>{% endfor %}
 {% endif %}
+<div class="resource-layout">
+    {# ---- Left Sidebar ---- #}
+    <div class="resource-sidebar">
+        <div class="sidebar-header">
+            <button class="btn btn-primary" onclick="openModal('/customers/add?modal=1', '添加客户')">+ 添加客户</button>
+        </div>
+        {% if customers %}
+        {% for c in customers %}
+        <div class="cust-item {{ 'active' if c.id == selected_cid }}" data-cid="{{ c.id }}">
+            <span class="dot"></span>
+            <span class="name">{{ c.name }}</span>
+            <span class="count">{{ c.sites|length }}</span>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="sidebar-empty">暂无客户</div>
+        {% endif %}
+    </div>
+
+    {# ---- Right Main ---- #}
+    <div class="resource-main" id="main-content">
+        {% if selected_customer %}
+        {# Customer Header #}
+        <div class="cust-header">
+            <div>
+                <h2>{{ selected_customer.name }}</h2>
+                {% if selected_customer.description %}<div class="cust-desc">{{ selected_customer.description }}</div>{% endif %}
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-sm btn-outline" onclick="openModal('/customers/{{ selected_customer.id }}/edit?modal=1', '编辑客户')">编辑</button>
+                <form method="POST" action="{{ url_for('customer_delete', cid=selected_customer.id) }}" style="display:inline" onsubmit="return confirm('删除客户将同时删除其下所有站点和页面，确定？');">
+                    <button class="btn btn-sm btn-danger">删除</button>
+                </form>
+            </div>
+        </div>
+
+        {# Sites & Pages #}
+        {% if selected_customer.sites %}
+        {% for s in selected_customer.sites %}
+        <div class="site-card">
+            <div class="site-header">
+                <div class="site-info">
+                    <span class="site-name">{{ s.name }}</span>
+                    <span class="site-domain">{{ s.domain }}</span>
+                    {% if s.waf_blocked %}<span class="badge badge-danger">WAF封禁</span>{% endif %}
+                    {% if not s.enabled %}<span class="badge badge-secondary">已暂停</span>{% endif %}
+                </div>
+                <div class="btn-group">
+                    {% if s.waf_blocked %}
+                    <form method="POST" action="{{ url_for('site_waf_unblock', sid=s.id) }}" style="display:inline">
+                        <button class="btn btn-sm btn-warning">解除封禁</button>
+                    </form>
+                    {% endif %}
+                    <button class="btn btn-sm btn-outline" onclick="openModal('/sites/{{ s.id }}/edit?modal=1', '编辑站点')">编辑</button>
+                    <form method="POST" action="{{ url_for('site_delete', sid=s.id) }}" style="display:inline" onsubmit="return confirm('删除站点将同时删除其下所有页面和检测数据，确定？');">
+                        <button class="btn btn-sm btn-danger">删除</button>
+                    </form>
+                </div>
+            </div>
+
+            {% if s.pages %}
+            <table class="page-table">
+                <tr><th>页面名称</th><th>URL</th><th>基线</th><th>最后检测</th><th>状态</th><th>操作</th></tr>
+                {% for p in s.pages %}
+                <tr>
+                    <td><strong>{{ p.name }}</strong></td>
+                    <td><a href="{{ p.url }}" target="_blank" class="page-url" title="{{ p.url }}">{{ p.url }}</a></td>
+                    <td>
+                        {% if p.has_baseline %}<span class="badge badge-success">已建立</span>{% else %}<span class="badge badge-warning">未建立</span>{% endif %}
+                    </td>
+                    <td class="text-muted">{{ format_dt(p.last_detected) if p.last_detected else '未检测' }}</td>
+                    <td><span class="badge badge-{{ status_class(p.last_status) }}">{{ status_label(p.last_status) if p.last_status else '未检测' }}</span></td>
+                    <td class="page-actions">
+                        {% if p.has_baseline %}
+                        <a href="{{ url_for('baseline_view', pid=p.id) }}" class="btn btn-sm btn-outline">查看基线</a>
+                        <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" style="display:inline" onsubmit="return confirm('重新建基线将覆盖旧基线，确定？');">
+                            <input type="hidden" name="reason" value="手动重建基线">
+                            <button class="btn btn-sm btn-warning">重建</button>
+                        </form>
+                        {% else %}
+                        <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" style="display:inline">
+                            <input type="hidden" name="reason" value="初始建立基线">
+                            <button class="btn btn-sm btn-success">建基线</button>
+                        </form>
+                        {% endif %}
+                        <button class="btn btn-sm btn-outline" onclick="openModal('/pages/{{ p.id }}/edit?modal=1', '编辑页面')">编辑</button>
+                        <form method="POST" action="{{ url_for('page_delete', pid=p.id) }}" style="display:inline" onsubmit="return confirm('删除该页面？');">
+                            <button class="btn btn-sm btn-danger">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+            <div class="empty-sites">暂无页面</div>
+            {% endif %}
+
+            <div class="site-card-footer">
+                <a href="javascript:void(0)" class="add-site-btn" onclick="openModal('/sites/{{ s.id }}/pages/add?modal=1', '添加页面')">+ 添加页面</a>
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="site-card-footer" style="margin-top: 8px; border: 1px dashed #ccc; border-radius: 8px; padding: 14px; background: transparent;">
+            <a href="javascript:void(0)" class="add-site-btn" onclick="openModal('/customers/{{ selected_customer.id }}/sites/add?modal=1', '添加站点')">+ 添加站点</a>
+        </div>
+
+        {% else %}
+        <div class="empty-sites" style="margin-top: 40px;">该客户下暂无站点</div>
+        {% endif %}
+
+        {% elif customers %}
+        <div class="no-selection">请从左侧选择一个客户</div>
+        {% else %}
+        <div class="empty-customer">
+            <div style="font-size: 48px; margin-bottom: 12px;">&#128101;</div>
+            <p>还没有添加客户，点击左侧按钮开始</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ---- Modal ---- #}
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3 id="modal-title"></h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="modal-body"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var selectedCid = {{ selected_cid|tojson if selected_cid else 'null' }};
+    var baseUrl = "{{ url_for('customers') }}";
+
+    // Sidebar click
+    document.querySelectorAll('.cust-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+            var cid = this.getAttribute('data-cid');
+            window.location.href = baseUrl + '?cid=' + cid;
+        });
+    });
+
+    // Modal management
+    window.openModal = function(url, title) {
+        var modal = document.getElementById('modal-overlay');
+        var titleEl = document.getElementById('modal-title');
+        var bodyEl = document.getElementById('modal-body');
+
+        titleEl.textContent = title;
+        bodyEl.innerHTML = '<div style="text-align:center;padding:40px;color:#999;">加载中...</div>';
+        modal.classList.add('show');
+
+        fetch(url, { headers: { 'X-Modal': '1' } })
+            .then(function(r) { return r.text(); })
+            .then(function(html) { bodyEl.innerHTML = html; })
+            .catch(function() { bodyEl.innerHTML = '<div style="color:red;padding:20px;">加载失败</div>'; });
+    };
+
+    window.closeModal = function() {
+        document.getElementById('modal-overlay').classList.remove('show');
+    };
+
+    // Close on overlay click
+    document.getElementById('modal-overlay').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // Close on Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeModal();
+    });
+})();
+</script>
 {% endblock %}

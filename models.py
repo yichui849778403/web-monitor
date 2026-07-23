@@ -182,7 +182,7 @@ class Site:
         rows = db.execute(
             'SELECT s.*, '
             '(SELECT COUNT(*) FROM pages WHERE site_id=s.id) as page_count, '
-            '(SELECT COUNT(*) FROM detection_results WHERE page_id IN (SELECT id FROM pages WHERE site_id=s.id) AND status != \'normal\' AND reviewed=0) as alert_count '
+            '(SELECT COUNT(*) FROM detection_results WHERE page_id IN (SELECT id FROM pages WHERE site_id=s.id) AND status NOT IN (\'normal\', \'info\') AND reviewed=0) as alert_count '
             'FROM sites s WHERE s.customer_id=? ORDER BY s.created_at DESC',
             (cid,)
         ).fetchall()
@@ -469,7 +469,7 @@ class DetectionResult:
         db = get_db()
         row = db.execute(
             'SELECT COUNT(*) as cnt FROM detection_results '
-            'WHERE status != \'normal\' AND is_retry=0'
+            'WHERE status NOT IN (\'normal\', \'info\') AND is_retry=0'
         ).fetchone()
         db.close()
         return row['cnt'] if row else 0
@@ -598,7 +598,7 @@ class DetectionResult:
 
         alerts = db.execute(
             'SELECT COUNT(*) as cnt FROM detection_results '
-            'WHERE status != \'normal\' AND is_retry=0 AND reviewed=0'
+            'WHERE status NOT IN (\'normal\', \'info\') AND is_retry=0 AND reviewed=0'
         ).fetchone()['cnt']
         stats['active_alerts'] = alerts
 

@@ -42,7 +42,7 @@ def _get_data_for_report(customer_id=None, date=None):
                 ).fetchall()
 
                 alerts = db.execute(
-                    'SELECT * FROM detection_results WHERE page_id=? AND date(detected_at)=? AND status != \'normal\' AND is_retry=0',
+                    'SELECT * FROM detection_results WHERE page_id=? AND date(detected_at)=? AND status NOT IN (\'normal\', \'info\') AND is_retry=0',
                     (page['id'], date)
                 ).fetchall()
 
@@ -137,6 +137,7 @@ def _render_report_html(data, date, title_extra=None):
         'connection_error': '连接失败',
         'http_error': 'HTTP错误',
         'error': '检测异常',
+        'info': '仅记录',
     }
 
     rows_html = ''

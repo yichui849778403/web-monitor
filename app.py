@@ -126,10 +126,37 @@ def dashboard():
 # ---------------------------------------------------------------------------
 # Customers
 # ---------------------------------------------------------------------------
+def _is_modal():
+    return request.headers.get('X-Modal') == '1' or request.args.get('modal') == '1'
+
+
 @app.route('/customers')
 def customers():
+    cid = request.args.get('cid', type=int)
     clist = Customer.list_all()
-    return render_template('customers.html', customers=clist)
+    waf_sites = Site.get_waf_blocked_sites()
+    waf_ids = {s['id'] for s in waf_sites}
+
+    for c in clist:
+        sites = Site.list_by_customer(c['id'])
+        for s in sites:
+            s['waf_blocked'] = s['id'] in waf_ids
+            s['pages'] = Page.list_by_site(s['id'])
+        c['sites'] = sites
+
+    selected_cid = cid
+    if not selected_cid and clist:
+        selected_cid = clist[0]['id']
+
+    selected_customer = None
+    if selected_cid:
+        for c in clist:
+            if c['id'] == selected_cid:
+                selected_customer = c
+                break
+
+    return render_template('customers.html', customers=clist,
+                           selected_cid=selected_cid, selected_customer=selected_customer)
 
 
 @app.route('/customers/add', methods=['GET', 'POST'])
@@ -140,7 +167,7 @@ def customer_add():
         if name:
             Customer.create(name, desc)
             return redirect(url_for('customers'))
-    return render_template('customer_form.html', customer=None)
+    return render_template('customer_form.html', customer=None, modal=_is_modal())
 
 
 @app.route('/customers/<int:cid>/edit', methods=['GET', 'POST'])
@@ -153,8 +180,8 @@ def customer_edit(cid):
         desc = request.form.get('description', '').strip()
         if name:
             Customer.update(cid, name, desc)
-            return redirect(url_for('customers'))
-    return render_template('customer_form.html', customer=c)
+            return redirect(url_for('customers', cid=cid))
+    return render_template('customer_form.html', customer=c, modal=_is_modal())
 
 
 @app.route('/customers/<int:cid>/delete', methods=['POST'])
@@ -168,13 +195,7 @@ def customer_delete(cid):
 # ---------------------------------------------------------------------------
 @app.route('/customers/<int:cid>/sites')
 def sites(cid):
-    cust = Customer.get_by_id(cid)
-    if not cust:
-        return redirect(url_for('customers'))
-    slist = Site.list_by_customer(cid)
-    waf_sites = Site.get_waf_blocked_sites()
-    waf_ids = {s['id'] for s in waf_sites}
-    return render_template('sites.html', customer=cust, sites=slist, waf_ids=waf_ids)
+    return redirect(url_for('customers', cid=cid))
 
 
 @app.route('/customers/<int:cid>/sites/add', methods=['GET', 'POST'])
@@ -188,8 +209,8 @@ def site_add(cid):
         priority = int(request.form.get('priority', 5))
         if name and domain:
             Site.create(cid, name, domain, priority)
-            return redirect(url_for('sites', cid=cid))
-    return render_template('site_form.html', customer=cust, site=None)
+            return redirect(url_for('customers', cid=cid))
+    return render_template('site_form.html', customer=cust, site=None, modal=_is_modal())
 
 
 @app.route('/sites/<int:sid>/edit', methods=['GET', 'POST'])
@@ -205,8 +226,8 @@ def site_edit(sid):
         priority = int(request.form.get('priority', 5))
         if name and domain:
             Site.update(sid, name, domain, enabled, priority)
-            return redirect(url_for('sites', cid=s['customer_id']))
-    return render_template('site_form.html', customer=cust, site=s)
+            return redirect(url_for('customers', cid=s['customer_id']))
+    return render_template('site_form.html', customer=cust, site=s, modal=_is_modal())
 
 
 @app.route('/sites/<int:sid>/delete', methods=['POST'])
@@ -216,13 +237,16 @@ def site_delete(sid):
         return redirect(url_for('dashboard'))
     cid = s['customer_id']
     Site.delete(sid)
-    return redirect(url_for('sites', cid=cid))
+    return redirect(url_for('customers', cid=cid))
 
 
 @app.route('/sites/<int:sid>/waf-unblock', methods=['POST'])
 def site_waf_unblock(sid):
-    Site.mark_waf_unblocked(sid)
-    return redirect(request.referrer or url_for('dashboard'))
+    s = Site.get_by_id(sid)
+    if s:
+        Site.mark_waf_unblocked(sid)
+        return redirect(url_for('customers', cid=s['customer_id']))
+    return redirect(url_for('dashboard'))
 
 
 # ---------------------------------------------------------------------------
@@ -233,9 +257,7 @@ def pages(sid):
     s = Site.get_by_id(sid)
     if not s:
         return redirect(url_for('dashboard'))
-    cust = Customer.get_by_id(s['customer_id'])
-    plist = Page.list_by_site(sid)
-    return render_template('pages.html', site=s, customer=cust, pages=plist)
+    return redirect(url_for('customers', cid=s['customer_id']))
 
 
 @app.route('/sites/<int:sid>/pages/add', methods=['GET', 'POST'])
@@ -250,8 +272,8 @@ def page_add(sid):
         render_wait = int(request.form.get('render_wait', 0))
         if name and url:
             Page.create(sid, name, url, render_wait)
-            return redirect(url_for('pages', sid=sid))
-    return render_template('page_form.html', site=s, customer=cust, page=None)
+            return redirect(url_for('customers', cid=s['customer_id']))
+    return render_template('page_form.html', site=s, customer=cust, page=None, modal=_is_modal())
 
 
 @app.route('/pages/<int:pid>/edit', methods=['GET', 'POST'])
@@ -266,18 +288,17 @@ def page_edit(pid):
         render_wait = int(request.form.get('render_wait', 0))
         if name and url:
             Page.update(pid, name, url, enabled, render_wait)
-            return redirect(url_for('pages', sid=p['site_id']))
+            return redirect(url_for('customers', cid=p['customer_id']))
     return render_template('page_form.html', site={'id': p['site_id'], 'name': p['site_name']},
-                           customer={'id': p['customer_id'], 'name': p['customer_name']}, page=p)
+                           customer={'id': p['customer_id'], 'name': p['customer_name']}, page=p, modal=_is_modal())
 
 
 @app.route('/pages/<int:pid>/delete', methods=['POST'])
 def page_delete(pid):
     p = Page.get_by_id(pid)
     if p:
-        sid = p['site_id']
         Page.delete(pid)
-        return redirect(url_for('pages', sid=sid))
+        return redirect(url_for('customers', cid=p['customer_id']))
     return redirect(url_for('dashboard'))
 
 
@@ -295,7 +316,7 @@ def page_baseline_create(pid):
         flash(f'基线建立失败: {error}', 'danger')
     else:
         flash('基线建立成功', 'success')
-    return redirect(url_for('pages', sid=p['site_id']))
+    return redirect(url_for('customers', cid=p['customer_id']))
 
 
 @app.route('/pages/<int:pid>/baseline/update', methods=['POST'])
@@ -307,7 +328,7 @@ def page_baseline_update(pid):
     bid, error = create_baseline_for_page(pid, p['url'], reason)
     if error:
         logger.error(f'Baseline update failed: {error}')
-    return redirect(url_for('pages', sid=p['site_id']))
+    return redirect(url_for('customers', cid=p['customer_id']))
 
 
 @app.route('/baseline/history')
@@ -590,7 +611,8 @@ def baseline_view(pid):
         return redirect(url_for('dashboard'))
     baseline = Baseline.get_latest(pid)
     if not baseline:
-        return redirect(url_for('pages', sid=p['site_id']))
+        return redirect(url_for('customers', cid=p['customer_id']))
+
     baseline_html = ''
     if baseline['html_path'] and os.path.exists(baseline['html_path']):
         with open(baseline['html_path'], 'r', encoding='utf-8') as f:
