@@ -22,14 +22,21 @@
 
     .review-form { margin-top: 20px; padding: 16px; background: #f5f5f5; border-radius: 8px; }
 
-    .diff { width: 100%; border-collapse: collapse; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; table-layout: fixed; }
-    .diff th { background: #f0f0f0; padding: 6px 12px; text-align: center; font-weight: 600; font-size: 12px; border: 1px solid #ddd; }
-    .diff td { padding: 1px 8px; vertical-align: top; white-space: pre-wrap; word-break: break-all; border: 1px solid #eee; }
-    .diff .diff_header { background: #f0f0f0 !important; text-align: right; color: #999; padding: 1px 6px; width: 1%; white-space: nowrap; }
-    .diff .diff_next { display: none; }
-    .diff .diff_add { background: #d4edda !important; color: #155724; }
-    .diff .diff_sub { background: #f8d7da !important; color: #721c24; }
-    .diff .diff_chg { background: #fff3cd !important; color: #856404; }
+    .diff-wrapper { overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }
+    .diff-wrapper table.diff { width: 100%; border-collapse: collapse; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; table-layout: fixed; min-width: 900px; }
+    .diff-wrapper table.diff colgroup:nth-of-type(1),
+    .diff-wrapper table.diff colgroup:nth-of-type(4) { width: 0; display: none; }
+    .diff-wrapper table.diff colgroup:nth-of-type(2),
+    .diff-wrapper table.diff colgroup:nth-of-type(5) { width: 3%; }
+    .diff-wrapper table.diff colgroup:nth-of-type(3),
+    .diff-wrapper table.diff colgroup:nth-of-type(6) { width: 47%; }
+    .diff-wrapper .diff td { padding: 1px 8px; vertical-align: top; white-space: pre-wrap; word-break: break-all; border: 1px solid #eee; }
+    .diff-wrapper .diff th { background: #f0f0f0; padding: 6px 12px; text-align: center; font-weight: 600; font-size: 12px; border: 1px solid #ddd; }
+    .diff-wrapper .diff .diff_header { background: #f0f0f0 !important; text-align: right; color: #999; padding: 1px 6px; white-space: nowrap; }
+    .diff-wrapper .diff .diff_next { display: none; }
+    .diff-wrapper .diff .diff_add { background: #d4edda !important; color: #155724; }
+    .diff-wrapper .diff .diff_sub { background: #f8d7da !important; color: #721c24; }
+    .diff-wrapper .diff .diff_chg { background: #fff3cd !important; color: #856404; }
 </style>
 {% endblock %}
 {% block content %}
@@ -99,7 +106,7 @@
 
 <div id="tab-source" class="tab-content">
     {% if source_diff %}
-    <div style="overflow-x: auto; border: 1px solid #ddd; border-radius: 8px;">
+    <div class="diff-wrapper">
         {{ source_diff|safe }}
     </div>
     {% else %}
@@ -146,6 +153,9 @@
 {% endif %}
 
 <script>
+(function(){
+    document.querySelectorAll('.diff td[nowrap]').forEach(td => td.removeAttribute('nowrap'));
+})();
 function showTab(name) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
