@@ -126,11 +126,28 @@ def scheduler_loop():
                                                       result['response_time'],
                                                       result['error_message'])
                         logger.warning(f'ALERT [{result["status"]}] {url}: {_summarize_changes(result.get("dom_changes", []))}')
+                elif result['status'] == 'info':
+                    msg = result.get('error_message', '')
+                    if not msg:
+                        pct = result.get('screenshot_diff_percent')
+                        msg = f'截图像素差异 {pct:.1f}%，无 DOM 结构变更' if pct else '仅截图有变化'
+                    rid = DetectionResult.create(
+                        pid, baseline_id, result['status'],
+                        dom_changes=result['dom_changes'],
+                        screenshot_diff_pct=result['screenshot_diff_percent'],
+                        screenshot_path=result['screenshot_path'],
+                        html_path=result['html_path'],
+                        diff_image_path=result['diff_image_path'],
+                        response_status=result['response_status'],
+                        response_time=result['response_time'],
+                        error_message=msg,
+                    )
+                    DetectionResult.log_detection(pid, rid, result['status'],
+                                                  result['response_status'],
+                                                  result['response_time'],
+                                                  msg)
                 else:
                     msg = result.get('error_message', '')
-                    if not msg and result['status'] == 'info':
-                        pct = result.get('screenshot_diff_percent')
-                        msg = f'截图像素差异 {pct:.1f}%，无 DOM 结构变更' if pct else '无异常'
                     DetectionResult.log_detection(pid, None, result['status'],
                                                   result['response_status'],
                                                   result['response_time'],

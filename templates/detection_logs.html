@@ -17,7 +17,7 @@
 
 {% if logs %}
 <table>
-    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>响应时间</th><th>错误信息</th></tr>
+    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>响应时间</th><th>错误信息</th><th>操作</th></tr>
     {% for l in logs %}
     <tr>
         <td>{{ format_dt(l.created_at) }}</td>
@@ -27,7 +27,14 @@
         <td><span class="badge badge-{{ status_class(l.status) }}">{{ status_label(l.status) }}</span></td>
         <td>{{ l.response_status or '-' }}</td>
         <td>{{ (l.response_time|string) + 's' if l.response_time else '-' }}</td>
-        <td class="text-muted" style="max-width:350px;">{{ l.error_message or '-' }}</td>
+        <td class="text-muted" style="max-width:250px;">{{ l.error_message or '-' }}</td>
+        <td>
+            {% if l.status != 'normal' and l.result_id %}
+            <a href="{{ url_for('diff_view', rid=l.result_id) }}" class="btn btn-sm btn-outline">查看差异</a>
+            {% else %}
+            -
+            {% endif %}
+        </td>
     </tr>
     {% endfor %}
 </table>
