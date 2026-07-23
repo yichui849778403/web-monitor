@@ -268,3 +268,6 @@ def stop():
     global _scheduler_running
     _scheduler_running = False
     logger.info('Scheduler stopping')
+    if _scheduler_thread and _scheduler_thread.is_alive():
+        _scheduler_thread.join(timeout=15)
+        logger.info('Scheduler thread joined')

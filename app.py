@@ -553,17 +553,27 @@ def keyword_import():
 
 @app.route('/reset-monitoring', methods=['POST'])
 def reset_monitoring():
+    was_running = scheduler._scheduler_running
+    if was_running:
+        scheduler.stop()
+    
     db = get_db()
-    db.execute('DELETE FROM baselines')
-    db.execute('DELETE FROM detection_results')
     db.execute('DELETE FROM detection_logs')
+    db.execute('DELETE FROM detection_results')
     db.execute('DELETE FROM baseline_history')
+    db.execute('DELETE FROM baselines')
     db.commit()
     db.close()
     import shutil
     for d in [BASELINE_DIR, SCREENSHOT_DIR, os.path.join(BASE_DIR, 'data', 'reports')]:
         if os.path.exists(d):
             shutil.rmtree(d, ignore_errors=True)
+    os.makedirs(BASELINE_DIR, exist_ok=True)
+    os.makedirs(SCREENSHOT_DIR, exist_ok=True)
+    
+    if was_running:
+        scheduler.start()
+    
     flash('监测数据已重置，客户/站点/页面资产已保留', 'success')
     return redirect(url_for('settings'))
 
