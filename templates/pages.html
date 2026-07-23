@@ -9,6 +9,9 @@
     </div>
 </div>
 
+{% set bs = get_flashed_messages(with_categories=true) %}
+{% for cat, m in bs %}<div class="alert-box {{ 'alert-danger' if cat == 'danger' else 'alert-success' if cat == 'success' else 'alert-info' }}">{{ m }}</div>{% endfor %}
+
 {% if pages %}
 {% for p in pages %}
 <div class="card">

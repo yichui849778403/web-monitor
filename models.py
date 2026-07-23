@@ -50,6 +50,7 @@ def init_db():
             name TEXT NOT NULL,
             url TEXT NOT NULL,
             enabled INTEGER DEFAULT 1,
+            render_wait INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT (datetime('now','localtime')),
             updated_at TIMESTAMP DEFAULT (datetime('now','localtime'))
         );
@@ -121,6 +122,10 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_logs_created ON detection_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_history_page ON baseline_history(page_id);
     ''')
+    try:
+        c.execute("ALTER TABLE pages ADD COLUMN render_wait INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -202,11 +207,11 @@ class Site:
         return dict(row) if row else None
 
     @staticmethod
-    def create(customer_id, name, domain, priority=5, request_interval=8):
+    def create(customer_id, name, domain, priority=5):
         db = get_db()
         db.execute(
-            'INSERT INTO sites (customer_id, name, domain, priority, request_interval) VALUES (?, ?, ?, ?, ?)',
-            (customer_id, name, domain.rstrip('/'), priority, request_interval)
+            'INSERT INTO sites (customer_id, name, domain, priority) VALUES (?, ?, ?, ?)',
+            (customer_id, name, domain.rstrip('/'), priority)
         )
         db.commit()
         sid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -214,11 +219,11 @@ class Site:
         return sid
 
     @staticmethod
-    def update(sid, name, domain, enabled, priority, request_interval):
+    def update(sid, name, domain, enabled, priority):
         db = get_db()
         db.execute(
-            "UPDATE sites SET name=?, domain=?, enabled=?, priority=?, request_interval=?, updated_at=datetime('now','localtime') WHERE id=?",
-            (name, domain.rstrip('/'), enabled, priority, request_interval, sid)
+            "UPDATE sites SET name=?, domain=?, enabled=?, priority=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, domain.rstrip('/'), enabled, priority, sid)
         )
         db.commit()
         db.close()
@@ -271,10 +276,11 @@ class Page:
     def list_all_enabled():
         db = get_db()
         rows = db.execute(
-            'SELECT p.*, s.id as site_id_for_ref, s.domain, s.request_interval, s.priority, s.waf_blocked '
+            'SELECT p.*, s.id as site_id_for_ref, s.domain, s.priority, s.waf_blocked '
             'FROM pages p '
             'JOIN sites s ON p.site_id=s.id '
             'WHERE p.enabled=1 AND s.enabled=1 AND s.waf_blocked=0 '
+            'AND EXISTS (SELECT 1 FROM baselines WHERE page_id=p.id) '
             'ORDER BY s.priority DESC, p.id ASC'
         ).fetchall()
         db.close()
@@ -292,20 +298,20 @@ class Page:
         return dict(row) if row else None
 
     @staticmethod
-    def create(site_id, name, url):
+    def create(site_id, name, url, render_wait=0):
         db = get_db()
-        db.execute('INSERT INTO pages (site_id, name, url) VALUES (?, ?, ?)', (site_id, name, url))
+        db.execute('INSERT INTO pages (site_id, name, url, render_wait) VALUES (?, ?, ?, ?)', (site_id, name, url, render_wait))
         db.commit()
         pid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.close()
         return pid
 
     @staticmethod
-    def update(pid, name, url, enabled):
+    def update(pid, name, url, enabled, render_wait=0):
         db = get_db()
         db.execute(
-            "UPDATE pages SET name=?, url=?, enabled=?, updated_at=datetime('now','localtime') WHERE id=?",
-            (name, url, enabled, pid)
+            "UPDATE pages SET name=?, url=?, enabled=?, render_wait=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, url, enabled, render_wait, pid)
         )
         db.commit()
         db.close()
@@ -362,7 +368,7 @@ class Baseline:
         return new_id
 
     @staticmethod
-    def get_history_entries(page_id=None, start_date=None, end_date=None):
+    def get_history_entries(page_id=None, start_date=None, end_date=None, limit=50, offset=0):
         db = get_db()
         query = '''
             SELECT bh.*, p.url, p.name as page_name, s.name as site_name, c.name as customer_name
@@ -382,10 +388,30 @@ class Baseline:
         if end_date:
             query += ' AND date(bh.created_at) <= ?'
             params.append(end_date)
-        query += ' ORDER BY bh.created_at DESC'
+        query += ' ORDER BY bh.created_at DESC LIMIT ? OFFSET ?'
+        params.append(limit)
+        params.append(offset)
         rows = db.execute(query, params).fetchall()
         db.close()
         return [dict(r) for r in rows]
+
+    @staticmethod
+    def count_history_entries(page_id=None, start_date=None, end_date=None):
+        db = get_db()
+        query = 'SELECT COUNT(*) as cnt FROM baseline_history bh WHERE 1=1'
+        params = []
+        if page_id:
+            query += ' AND bh.page_id=?'
+            params.append(page_id)
+        if start_date:
+            query += ' AND date(bh.created_at) >= ?'
+            params.append(start_date)
+        if end_date:
+            query += ' AND date(bh.created_at) <= ?'
+            params.append(end_date)
+        row = db.execute(query, params).fetchone()
+        db.close()
+        return row['cnt'] if row else 0
 
 
 class DetectionResult:
@@ -423,7 +449,7 @@ class DetectionResult:
         db.close()
 
     @staticmethod
-    def get_alerts(limit=100):
+    def get_alerts(limit=100, offset=0):
         db = get_db()
         rows = db.execute(
             'SELECT dr.*, p.url, p.name as page_name, s.name as site_name, c.name as customer_name '
@@ -432,11 +458,32 @@ class DetectionResult:
             'JOIN sites s ON p.site_id=s.id '
             'JOIN customers c ON s.customer_id=c.id '
             'WHERE dr.status != \'normal\' AND dr.is_retry=0 '
-            'ORDER BY dr.detected_at DESC LIMIT ?',
-            (limit,)
+            'ORDER BY dr.detected_at DESC LIMIT ? OFFSET ?',
+            (limit, offset)
         ).fetchall()
         db.close()
         return [dict(r) for r in rows]
+
+    @staticmethod
+    def count_alerts_all():
+        db = get_db()
+        row = db.execute(
+            'SELECT COUNT(*) as cnt FROM detection_results '
+            'WHERE status != \'normal\' AND is_retry=0'
+        ).fetchone()
+        db.close()
+        return row['cnt'] if row else 0
+
+    @staticmethod
+    def has_unreviewed_alert(page_id, status):
+        db = get_db()
+        row = db.execute(
+            'SELECT COUNT(*) as cnt FROM detection_results '
+            'WHERE page_id=? AND status=? AND is_retry=0 AND reviewed=0',
+            (page_id, status)
+        ).fetchone()
+        db.close()
+        return (row['cnt'] if row else 0) > 0
 
     @staticmethod
     def get_page_results(pid, limit=50):
@@ -484,7 +531,7 @@ class DetectionResult:
         return row['cnt']
 
     @staticmethod
-    def get_logs(start_date=None, end_date=None, page_id=None, limit=200):
+    def get_logs(start_date=None, end_date=None, page_id=None, limit=200, offset=0):
         db = get_db()
         query = '''
             SELECT dl.*, p.url, p.name as page_name,
@@ -505,11 +552,34 @@ class DetectionResult:
         if page_id:
             query += ' AND dl.page_id=?'
             params.append(page_id)
-        query += ' ORDER BY dl.created_at DESC LIMIT ?'
+        query += ' ORDER BY dl.created_at DESC LIMIT ? OFFSET ?'
         params.append(limit)
+        params.append(offset)
         rows = db.execute(query, params).fetchall()
         db.close()
         return [dict(r) for r in rows]
+
+    @staticmethod
+    def count_logs(start_date=None, end_date=None, page_id=None):
+        db = get_db()
+        query = '''
+            SELECT COUNT(*) as cnt FROM detection_logs dl
+            JOIN pages p ON dl.page_id=p.id
+            WHERE 1=1
+        '''
+        params = []
+        if start_date:
+            query += ' AND date(dl.created_at) >= ?'
+            params.append(start_date)
+        if end_date:
+            query += ' AND date(dl.created_at) <= ?'
+            params.append(end_date)
+        if page_id:
+            query += ' AND dl.page_id=?'
+            params.append(page_id)
+        row = db.execute(query, params).fetchone()
+        db.close()
+        return row['cnt'] if row else 0
 
     @staticmethod
     def get_dashboard_stats():

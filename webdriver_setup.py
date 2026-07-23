@@ -23,6 +23,9 @@ def get_driver():
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--disable-gpu')
             options.add_argument('--window-size=1920,1080')
+            options.add_argument('--ignore-certificate-errors')
+            options.add_argument('--ignore-ssl-errors')
+            options.add_argument('--allow-insecure-localhost')
             options.add_argument('--disable-blink-features=AutomationControlled')
             options.add_experimental_option('excludeSwitches', ['enable-automation'])
             options.add_experimental_option('useAutomationExtension', False)
@@ -37,11 +40,11 @@ def get_driver():
     return _driver
 
 
-def take_screenshot(url, page_id, timestamp):
+def take_screenshot(url, page_id, timestamp, wait_seconds=2):
     try:
         driver = get_driver()
         driver.get(url)
-        time.sleep(2)
+        time.sleep(wait_seconds)
 
         page_width = driver.execute_script(
             "return Math.max(document.body.scrollWidth, document.body.offsetWidth, "
@@ -63,6 +66,29 @@ def take_screenshot(url, page_id, timestamp):
         return None
 
 
+def fetch_rendered(url, wait_seconds=5):
+    try:
+        driver = get_driver()
+        driver.get(url)
+        time.sleep(wait_seconds)
+
+        page_width = driver.execute_script(
+            "return Math.max(document.body.scrollWidth, document.body.offsetWidth, "
+            "document.documentElement.clientWidth, document.documentElement.scrollWidth, document.documentElement.offsetWidth);"
+        )
+        page_height = driver.execute_script(
+            "return Math.max(document.body.scrollHeight, document.body.offsetHeight, "
+            "document.documentElement.clientHeight, document.documentElement.scrollHeight, document.documentElement.offsetHeight);"
+        )
+        driver.set_window_size(page_width, page_height)
+
+        html = driver.page_source
+        return html
+    except Exception as e:
+        logger.error(f'Render failed for {url}: {e}')
+        return None
+
+
 def quit_driver():
     global _driver
     if _driver:
@@ -71,3 +97,10 @@ def quit_driver():
         except:
             pass
         _driver = None
+    import subprocess, sys
+    if sys.platform == 'win32':
+        try:
+            subprocess.run(['taskkill', '/f', '/im', 'msedgedriver.exe'], capture_output=True)
+            subprocess.run(['taskkill', '/f', '/im', 'msedge.exe'], capture_output=True)
+        except:
+            pass

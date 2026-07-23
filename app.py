@@ -3,10 +3,10 @@ import json
 import logging
 from datetime import datetime, timedelta
 
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, send_from_directory, Response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file, send_from_directory, Response, flash
 
-from config import load_config, save_config, BASELINE_DIR, DATA_DIR
-from models import init_db, Customer, Site, Page, Baseline, DetectionResult, CustomKeyword
+from config import load_config, save_config, BASELINE_DIR, SCREENSHOT_DIR, DATA_DIR, BASE_DIR
+from models import init_db, Customer, Site, Page, Baseline, DetectionResult, CustomKeyword, get_db
 from detector import create_baseline_for_page
 from report_generator import generate_daily_report, generate_report_for_customer
 import scheduler
@@ -62,6 +62,7 @@ def _status_label(status):
         'http_error': 'HTTP错误',
         'error': '检测异常',
         'no_baseline': '无基线',
+        'info': '仅记录',
     }
     return labels.get(status, status)
 
@@ -77,6 +78,7 @@ def _status_class(status):
         'http_error': 'danger',
         'error': 'danger',
         'no_baseline': 'secondary',
+        'info': 'info',
     }
     return classes.get(status, 'secondary')
 
@@ -183,9 +185,8 @@ def site_add(cid):
         name = request.form.get('name', '').strip()
         domain = request.form.get('domain', '').strip()
         priority = int(request.form.get('priority', 5))
-        interval = int(request.form.get('request_interval', 8))
         if name and domain:
-            Site.create(cid, name, domain, priority, interval)
+            Site.create(cid, name, domain, priority)
             return redirect(url_for('sites', cid=cid))
     return render_template('site_form.html', customer=cust, site=None)
 
@@ -201,9 +202,8 @@ def site_edit(sid):
         domain = request.form.get('domain', '').strip()
         enabled = int(request.form.get('enabled', '1'))
         priority = int(request.form.get('priority', 5))
-        interval = int(request.form.get('request_interval', 8))
         if name and domain:
-            Site.update(sid, name, domain, enabled, priority, interval)
+            Site.update(sid, name, domain, enabled, priority)
             return redirect(url_for('sites', cid=s['customer_id']))
     return render_template('site_form.html', customer=cust, site=s)
 
@@ -246,8 +246,9 @@ def page_add(sid):
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         url = request.form.get('url', '').strip()
+        render_wait = int(request.form.get('render_wait', 0))
         if name and url:
-            Page.create(sid, name, url)
+            Page.create(sid, name, url, render_wait)
             return redirect(url_for('pages', sid=sid))
     return render_template('page_form.html', site=s, customer=cust, page=None)
 
@@ -261,8 +262,9 @@ def page_edit(pid):
         name = request.form.get('name', '').strip()
         url = request.form.get('url', '').strip()
         enabled = int(request.form.get('enabled', '1'))
+        render_wait = int(request.form.get('render_wait', 0))
         if name and url:
-            Page.update(pid, name, url, enabled)
+            Page.update(pid, name, url, enabled, render_wait)
             return redirect(url_for('pages', sid=p['site_id']))
     return render_template('page_form.html', site={'id': p['site_id'], 'name': p['site_name']},
                            customer={'id': p['customer_id'], 'name': p['customer_name']}, page=p)
@@ -289,8 +291,9 @@ def page_baseline_create(pid):
     reason = request.form.get('reason', '手动建立基线')
     bid, error = create_baseline_for_page(pid, p['url'], reason)
     if error:
-        logger.error(f'Baseline creation failed: {error}')
-        return redirect(url_for('pages', sid=p['site_id']))
+        flash(f'基线建立失败: {error}', 'danger')
+    else:
+        flash('基线建立成功', 'success')
     return redirect(url_for('pages', sid=p['site_id']))
 
 
@@ -311,8 +314,13 @@ def baseline_history():
     page_id = request.args.get('page_id', type=int)
     start = request.args.get('start')
     end = request.args.get('end')
-    entries = Baseline.get_history_entries(page_id=page_id, start_date=start, end_date=end)
-    return render_template('baseline_history.html', entries=entries)
+    p = request.args.get('p', 1, type=int)
+    per_page = request.args.get('per_page', 30, type=int)
+    offset = (p - 1) * per_page
+    entries = Baseline.get_history_entries(page_id=page_id, start_date=start, end_date=end, limit=per_page, offset=offset)
+    total = Baseline.count_history_entries(page_id=page_id, start_date=start, end_date=end)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template('baseline_history.html', entries=entries, page=p, total_pages=total_pages, total=total, per_page=per_page)
 
 
 # ---------------------------------------------------------------------------
@@ -320,8 +328,13 @@ def baseline_history():
 # ---------------------------------------------------------------------------
 @app.route('/alerts')
 def alerts():
-    alist = DetectionResult.get_alerts(limit=200)
-    return render_template('alerts.html', alerts=alist)
+    p = request.args.get('p', 1, type=int)
+    per_page = request.args.get('per_page', 30, type=int)
+    offset = (p - 1) * per_page
+    alist = DetectionResult.get_alerts(limit=per_page, offset=offset)
+    total = DetectionResult.count_alerts_all()
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template('alerts.html', alerts=alist, page=p, total_pages=total_pages, total=total, per_page=per_page)
 
 
 @app.route('/alerts/<int:rid>/review', methods=['POST'])
@@ -422,8 +435,13 @@ def detection_logs():
     page_id = request.args.get('page_id', type=int)
     start = request.args.get('start', _today_str())
     end = request.args.get('end', _today_str())
-    logs = DetectionResult.get_logs(start_date=start, end_date=end, page_id=page_id, limit=300)
-    return render_template('detection_logs.html', logs=logs)
+    p = request.args.get('p', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    offset = (p - 1) * per_page
+    logs = DetectionResult.get_logs(start_date=start, end_date=end, page_id=page_id, limit=per_page, offset=offset)
+    total = DetectionResult.count_logs(start_date=start, end_date=end, page_id=page_id)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+    return render_template('detection_logs.html', logs=logs, page=p, total_pages=total_pages, total=total, per_page=per_page)
 
 
 # ---------------------------------------------------------------------------
@@ -518,6 +536,23 @@ def keyword_import():
     return redirect(url_for('settings'))
 
 
+@app.route('/reset-monitoring', methods=['POST'])
+def reset_monitoring():
+    db = get_db()
+    db.execute('DELETE FROM baselines')
+    db.execute('DELETE FROM detection_results')
+    db.execute('DELETE FROM detection_logs')
+    db.execute('DELETE FROM baseline_history')
+    db.commit()
+    db.close()
+    import shutil
+    for d in [BASELINE_DIR, SCREENSHOT_DIR, os.path.join(BASE_DIR, 'data', 'reports')]:
+        if os.path.exists(d):
+            shutil.rmtree(d, ignore_errors=True)
+    flash('监测数据已重置，客户/站点/页面资产已保留', 'success')
+    return redirect(url_for('settings'))
+
+
 @app.route('/rules')
 def rules():
     return render_template('rules.html')
@@ -552,5 +587,4 @@ atexit.register(cleanup)
 
 
 if __name__ == '__main__':
-    scheduler.start()
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    app.run(host='127.0.0.1', port=5000, debug=False, threaded=True)

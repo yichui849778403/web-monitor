@@ -1,0 +1,70 @@
+{% macro pagination(url_base, page, total_pages, total, per_page, extra_params={}) %}
+{% if total_pages >= 1 %}
+<div style="display:flex;justify-content:center;align-items:center;gap:5px;margin-top:16px;flex-wrap:wrap;">
+
+    {% if page > 1 %}
+    <a href="{{ url_base }}p={{ page-1 }}&per_page={{ per_page }}" class="btn btn-sm btn-outline">上一页</a>
+    {% else %}
+    <span class="btn btn-sm btn-outline" style="opacity:0.4;cursor:default;">上一页</span>
+    {% endif %}
+
+    {% if total_pages <= 7 %}
+        {% for pg in range(1, total_pages + 1) %}
+            {% if pg == page %}
+            <span class="btn btn-sm btn-primary" style="min-width:30px;">{{ pg }}</span>
+            {% else %}
+            <a href="{{ url_base }}p={{ pg }}&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">{{ pg }}</a>
+            {% endif %}
+        {% endfor %}
+    {% else %}
+        {% if page > 2 %}
+        <a href="{{ url_base }}p=1&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">1</a>
+        {% else %}
+        <span class="btn btn-sm btn-primary" style="min-width:30px;">1</span>
+        {% endif %}
+
+        {% if page > 3 %}<span style="color:#999;padding:4px;">...</span>{% endif %}
+
+        {% set start = [page - 1, 2] | max %}
+        {% set end = [page + 1, total_pages - 1] | min %}
+        {% for pg in range(start, end + 1) %}
+            {% if pg == page %}
+            <span class="btn btn-sm btn-primary" style="min-width:30px;">{{ pg }}</span>
+            {% else %}
+            <a href="{{ url_base }}p={{ pg }}&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">{{ pg }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < total_pages - 2 %}<span style="color:#999;padding:4px;">...</span>{% endif %}
+
+        {% if page < total_pages - 1 %}
+        <a href="{{ url_base }}p={{ total_pages }}&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">{{ total_pages }}</a>
+        {% else %}
+        <span class="btn btn-sm btn-primary" style="min-width:30px;">{{ total_pages }}</span>
+        {% endif %}
+    {% endif %}
+
+    {% if page < total_pages %}
+    <a href="{{ url_base }}p={{ page+1 }}&per_page={{ per_page }}" class="btn btn-sm btn-outline">下一页</a>
+    {% else %}
+    <span class="btn btn-sm btn-outline" style="opacity:0.4;cursor:default;">下一页</span>
+    {% endif %}
+
+    <form method="GET" action="{{ url_base }}" onsubmit="var inp=this.querySelector('[name=p]');var p=parseInt(inp.value);if(!p||p<1||p>{{ total_pages }}){alert('请输入 1-{{ total_pages }} 的页码');return false;}" style="display:inline;margin-left:6px;">
+        {% for k,v in extra_params.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        <input type="hidden" name="per_page" value="{{ per_page }}">
+        <input type="number" name="p" min="1" max="{{ total_pages }}" placeholder="页" style="width:60px;padding:5px 8px;border:1px solid #ddd;border-radius:3px;font-size:12px;text-align:center;">
+        <button type="submit" class="btn btn-sm btn-outline" style="padding:4px 8px;">跳转</button>
+    </form>
+
+    <form method="GET" action="{{ url_base }}" style="display:inline;margin-left:4px;">
+        {% for k,v in extra_params.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+        <input type="hidden" name="p" value="1">
+        <select name="per_page" onchange="this.form.submit()" style="padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:12px;">
+            {% for n in [10,20,30,50,100] %}<option value="{{ n }}" {{ 'selected' if per_page == n }}>{{ n }} 条/页</option>{% endfor %}
+        </select>
+    </form>
+    <span class="text-muted" style="margin-left:4px;">共 {{ total }} 条</span>
+</div>
+{% endif %}
+{% endmacro %}

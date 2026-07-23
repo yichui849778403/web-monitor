@@ -61,6 +61,8 @@ def scheduler_loop():
     global _scheduler_running, _paused, _current_task, _task_history
     config = load_config()
 
+    time.sleep(3)
+
     while _scheduler_running:
         if _paused:
             time.sleep(2)
@@ -84,7 +86,6 @@ def scheduler_loop():
         pid = page['id']
         url = page['url']
         domain = page['domain']
-        request_interval = page['request_interval'] or config['global_request_interval']
         site_id = page.get('site_id_for_ref')
 
         _current_task = {'page_id': pid, 'url': url, 'started_at': datetime.now().isoformat()}
@@ -101,24 +102,39 @@ def scheduler_loop():
                 baseline = Baseline.get_latest(pid)
                 baseline_id = baseline['id'] if baseline else None
 
-                rid = DetectionResult.create(
-                    pid, baseline_id, result['status'],
-                    dom_changes=result['dom_changes'],
-                    screenshot_diff_pct=result['screenshot_diff_percent'],
-                    screenshot_path=result['screenshot_path'],
-                    html_path=result['html_path'],
-                    diff_image_path=result['diff_image_path'],
-                    response_status=result['response_status'],
-                    response_time=result['response_time'],
-                    error_message=result['error_message'],
-                )
-                DetectionResult.log_detection(pid, rid, result['status'],
-                                              result['response_status'],
-                                              result['response_time'],
-                                              result['error_message'])
-
                 if result['status'] in ('tampered', 'malware', 'unreachable'):
-                    logger.warning(f'ALERT [{result["status"]}] {url}: {_summarize_changes(result.get("dom_changes", []))}')
+                    if DetectionResult.has_unreviewed_alert(pid, result['status']):
+                        logger.info(f'Skip duplicate alert for {url} [{result["status"]}]')
+                        DetectionResult.log_detection(pid, None, result['status'],
+                                                      result['response_status'],
+                                                      result['response_time'],
+                                                      result['error_message'])
+                    else:
+                        rid = DetectionResult.create(
+                            pid, baseline_id, result['status'],
+                            dom_changes=result['dom_changes'],
+                            screenshot_diff_pct=result['screenshot_diff_percent'],
+                            screenshot_path=result['screenshot_path'],
+                            html_path=result['html_path'],
+                            diff_image_path=result['diff_image_path'],
+                            response_status=result['response_status'],
+                            response_time=result['response_time'],
+                            error_message=result['error_message'],
+                        )
+                        DetectionResult.log_detection(pid, rid, result['status'],
+                                                      result['response_status'],
+                                                      result['response_time'],
+                                                      result['error_message'])
+                        logger.warning(f'ALERT [{result["status"]}] {url}: {_summarize_changes(result.get("dom_changes", []))}')
+                else:
+                    msg = result.get('error_message', '')
+                    if not msg and result['status'] == 'info':
+                        pct = result.get('screenshot_diff_percent')
+                        msg = f'截图像素差异 {pct:.1f}%，无 DOM 结构变更' if pct else '无异常'
+                    DetectionResult.log_detection(pid, None, result['status'],
+                                                  result['response_status'],
+                                                  result['response_time'],
+                                                  msg)
 
             _task_history.append({
                 'page_id': pid, 'url': url, 'status': result['status'],
@@ -138,7 +154,7 @@ def scheduler_loop():
             if next_page.get('domain') == domain:
                 wait = same_domain_wait
             else:
-                wait = request_interval
+                wait = config['global_request_interval']
         else:
             wait = config['global_request_interval']
 

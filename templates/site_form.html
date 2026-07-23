@@ -25,10 +25,6 @@
         <label>优先级 (1-10，越高检测越频繁)</label>
         <input type="number" name="priority" value="{{ site.priority if site else 5 }}" min="1" max="10">
     </div>
-    <div class="form-group">
-        <label>请求间隔 (秒，同域名不同页面之间)</label>
-        <input type="number" name="request_interval" value="{{ site.request_interval if site else 8 }}" min="3" max="120">
-    </div>
     <div class="btn-group">
         <button type="submit" class="btn btn-primary">保存</button>
         <a href="{{ url_for('sites', cid=customer.id) }}" class="btn btn-outline">取消</a>

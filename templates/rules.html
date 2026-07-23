@@ -35,7 +35,7 @@
     <h3 style="color:#1a73e8;margin-bottom:10px;">三、可达性检测</h3>
     <table>
         <tr><th style="width:40px;">#</th><th>规则</th><th style="width:200px;">触发条件</th></tr>
-        <tr><td>14</td><td>HTTP 状态码</td><td>响应状态码不是 200 即告警</td></tr>
+        <tr><td>14</td><td>HTTP 5xx 状态码</td><td>响应状态码 >= 500（服务器错误）即告警</td></tr>
         <tr><td>15</td><td>连续失败</td><td>连续 3 次检测失败 (超时/连接失败/HTTP错误) 触发告警</td></tr>
         <tr><td>16</td><td>WAF 封禁</td><td>同一站点所有页面的 URL 同时返回 403，自动暂停该站点检测</td></tr>
     </table>

@@ -14,8 +14,8 @@ from io import BytesIO
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from config import load_config, BASELINE_DIR, SCREENSHOT_DIR
-from models import Baseline, DetectionResult, CustomKeyword
-from webdriver_setup import take_screenshot
+from models import Baseline, DetectionResult, CustomKeyword, Page
+from webdriver_setup import take_screenshot, fetch_rendered
 
 
 def load_webdriver():
@@ -50,7 +50,6 @@ def fetch_page(url, config):
         allow_redirects=True,
         verify=False,
     )
-    resp.raise_for_status()
     resp.encoding = resp.apparent_encoding or 'utf-8'
     return resp
 
@@ -315,6 +314,7 @@ def compare_screenshots(baseline_path, current_path, diff_output_path, threshold
 def evaluate_rules(dom_changes, screenshot_diff_pct, response_status, suspicious_items):
     has_malware = False
     has_tamper = False
+    has_screenshot_only = False
 
     for c in dom_changes:
         if c['severity'] == 'malware':
@@ -323,19 +323,24 @@ def evaluate_rules(dom_changes, screenshot_diff_pct, response_status, suspicious
             has_tamper = True
 
     if screenshot_diff_pct is not None and screenshot_diff_pct >= 5.0:
-        has_tamper = True
+        if not has_tamper and not has_malware:
+            has_screenshot_only = True
+        else:
+            has_tamper = True
 
     for item in suspicious_items:
         if item['severity'] in ('warning', 'critical'):
             has_malware = True
 
-    if response_status and response_status != 200:
+    if response_status and response_status >= 500:
         return 'unreachable'
 
     if has_malware:
         return 'malware'
     elif has_tamper:
         return 'tampered'
+    elif has_screenshot_only:
+        return 'info'
     else:
         return 'normal'
 
@@ -362,12 +367,23 @@ def run_detection(page_id, url, domain):
 
     try:
         start = time.time()
-        resp = fetch_page(url, config)
-        elapsed = round(time.time() - start, 2)
-        result['response_time'] = elapsed
-        result['response_status'] = resp.status_code
+        p = Page.get_by_id(page_id)
+        render_wait = p['render_wait'] if p else 0
 
-        html = resp.text
+        if render_wait > 0:
+            html = fetch_rendered(url, wait_seconds=render_wait)
+            if not html:
+                result['status'] = 'error'
+                result['error_message'] = '浏览器渲染失败，获取页面内容为空'
+                return result
+            result['response_status'] = 200
+            result['response_time'] = round(time.time() - start, 2)
+        else:
+            resp = fetch_page(url, config)
+            elapsed = round(time.time() - start, 2)
+            result['response_time'] = elapsed
+            result['response_status'] = resp.status_code
+            html = resp.text
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         html_dir = os.path.join(SCREENSHOT_DIR, str(page_id))
         os.makedirs(html_dir, exist_ok=True)
@@ -380,6 +396,8 @@ def run_detection(page_id, url, domain):
         baseline_fp = json.loads(baseline['dom_fingerprint'])
 
         dom_changes = compare_dom(baseline_fp, current_fp, domain)
+        if render_wait > 0:
+            dom_changes = [c for c in dom_changes if c['category'] not in ('content', 'structure')]
         result['dom_changes'] = dom_changes
 
         suspicious_items = detect_suspicious_dom(current_fp)
@@ -397,7 +415,8 @@ def run_detection(page_id, url, domain):
             })
             result['dom_changes'] = dom_changes
 
-        screenshot_path = take_screenshot(url, page_id, ts)
+        screenshot_wait = max(render_wait, 2) if render_wait > 0 else 2
+        screenshot_path = take_screenshot(url, page_id, ts, wait_seconds=screenshot_wait)
         if screenshot_path:
             result['screenshot_path'] = screenshot_path
 
@@ -447,9 +466,23 @@ def run_detection(page_id, url, domain):
 
 def create_baseline_for_page(page_id, url, reason=''):
     config = load_config()
+    page = Page.get_by_id(page_id)
+    render_wait = page['render_wait'] if page else 0
     try:
-        resp = fetch_page(url, config)
-        html = resp.text
+        if render_wait > 0:
+            html = fetch_rendered(url, wait_seconds=render_wait)
+            if not html:
+                return None, '浏览器渲染失败，获取页面内容为空'
+        else:
+            ua = random.choice(config['user_agents'])
+            headers = {
+                'User-Agent': ua,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            }
+            resp = requests.get(url, headers=headers, timeout=config['request_timeout'],
+                                allow_redirects=True, verify=False)
+            html = resp.text
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         bl_dir = os.path.join(BASELINE_DIR, str(page_id))

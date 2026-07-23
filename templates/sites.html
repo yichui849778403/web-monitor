@@ -21,7 +21,7 @@
             <span class="text-muted"> &mdash; {{ s.domain }}</span>
             {% if s.id in waf_ids %}<span class="badge badge-danger">WAF 封禁</span>{% endif %}
             {% if not s.enabled %}<span class="badge badge-secondary">已暂停</span>{% endif %}
-            <div class="text-muted" style="margin-top:4px;">优先级: {{ s.priority }} | 请求间隔: {{ s.request_interval }}s | 页面: {{ s.page_count }} | 告警: {{ s.alert_count }}</div>
+            <div class="text-muted" style="margin-top:4px;">优先级: {{ s.priority }} | 页面: {{ s.page_count }} | 告警: {{ s.alert_count }}</div>
         </div>
         <div class="btn-group">
             {% if s.id in waf_ids %}

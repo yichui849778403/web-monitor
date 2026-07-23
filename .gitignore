@@ -5,3 +5,6 @@ __pycache__/
 .vscode/
 .idea/
 *.db
+*.log
+*.txt
+static/*.png

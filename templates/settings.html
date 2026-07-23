@@ -8,12 +8,12 @@
         <h3 style="margin-bottom:10px;">检测参数</h3>
         <form method="POST">
             <div class="form-group">
-                <label>全局请求间隔 (秒)</label>
+                <label>全局默认间隔 (秒，不同域名之间)</label>
                 <input type="number" name="global_request_interval" value="{{ config.global_request_interval }}" min="3" max="120">
                 <span class="text-muted">不同域名之间的默认请求间隔</span>
             </div>
             <div class="form-group">
-                <label>同域名间隔 (秒)</label>
+                <label>同域名间隔 (秒，同一域名连续请求)</label>
                 <input type="number" name="same_domain_interval" value="{{ config.same_domain_interval }}" min="10" max="300">
                 <span class="text-muted">同一域名下不同页面之间的请求间隔，用于规避WAF</span>
             </div>
@@ -42,6 +42,14 @@
                 <button type="submit" class="btn btn-primary">保存设置</button>
             </div>
         </form>
+
+        <div style="margin-top:30px;padding-top:20px;border-top:1px solid #e0e0e0;">
+            <h3 style="margin-bottom:10px;">数据管理</h3>
+            <p class="text-muted" style="margin-bottom:10px;">清空所有基线、告警、检测日志和截图，保留客户/站点/页面资产配置。</p>
+            <form method="POST" action="{{ url_for('reset_monitoring') }}" onsubmit="return confirm('确定清空所有监测数据？客户、站点、页面配置会保留。');">
+                <button type="submit" class="btn btn-danger">重置监测数据</button>
+            </form>
+        </div>
     </div>
 
     <div>

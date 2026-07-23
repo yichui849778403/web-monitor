@@ -70,6 +70,9 @@
     </tr>
     {% endfor %}
 </table>
+<div style="text-align:center;margin-top:8px;">
+    <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline">查看全部告警 &raquo;</a>
+</div>
 {% else %}
 <div class="empty-state">
     <div class="icon">&#9989;</div>
@@ -93,6 +96,9 @@
     </tr>
     {% endfor %}
 </table>
+<div style="text-align:center;margin-top:8px;">
+    <a href="{{ url_for('detection_logs') }}?start={{ today_str() }}&end={{ today_str() }}" class="btn btn-sm btn-outline">查看完整日志 &raquo;</a>
+</div>
 {% else %}
 <div class="empty-state"><p>今日暂无检测记录</p></div>
 {% endif %}

@@ -21,6 +21,11 @@
         </select>
     </div>
     {% endif %}
+    <div class="form-group">
+        <label>渲染等待 (秒，0=不等待)</label>
+        <input type="number" name="render_wait" value="{{ page.render_wait if page else 0 }}" min="0" max="30">
+        <span class="text-muted">单页面应用(SPA)需设 >0，用浏览器渲染 JS 后再抓取页面内容。普通页面保持 0 即可</span>
+    </div>
     <div class="btn-group">
         <button type="submit" class="btn btn-primary">保存</button>
         <a href="{{ url_for('pages', sid=page.site_id if page else site.id) }}" class="btn btn-outline">取消</a>
