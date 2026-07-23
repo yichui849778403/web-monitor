@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}客户管理{% endblock %}
+{% block content %}
+<div class="page-title">
+    客户管理
+    <a href="{{ url_for('customer_add') }}" class="btn btn-primary">+ 添加客户</a>
+</div>
+{% if customers %}
+<table>
+    <tr><th>客户名称</th><th>描述</th><th>站点数</th><th>创建时间</th><th>操作</th></tr>
+    {% for c in customers %}
+    <tr>
+        <td><strong>{{ c.name }}</strong></td>
+        <td class="text-muted">{{ c.description or '-' }}</td>
+        <td>{{ c.site_count }}</td>
+        <td>{{ format_dt(c.created_at) }}</td>
+        <td>
+            <a href="{{ url_for('sites', cid=c.id) }}" class="btn btn-sm btn-outline">站点</a>
+            <a href="{{ url_for('customer_edit', cid=c.id) }}" class="btn btn-sm btn-outline">编辑</a>
+            <form method="POST" action="{{ url_for('customer_delete', cid=c.id) }}" style="display:inline" onsubmit="return confirm('删除客户将同时删除其下所有站点和页面，确定？');">
+                <button class="btn btn-sm btn-danger">删除</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state">
+    <div class="icon">&#128101;</div>
+    <p>还没有添加客户，点击上方按钮开始</p>
+</div>
+{% endif %}
+{% endblock %}

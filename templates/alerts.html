@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}告警管理{% endblock %}
+{% block content %}
+<div class="page-title">告警管理</div>
+{% if alerts %}
+<table>
+    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>审核</th><th>操作</th></tr>
+    {% for a in alerts %}
+    {% set reviewed = a.reviewed %}
+    <tr style="{{ 'background:#fff8e1;' if not reviewed and a.status in ('malware','tampered') }}">
+        <td>{{ format_dt(a.detected_at) }}</td>
+        <td>{{ a.customer_name }}</td>
+        <td>{{ a.site_name }}</td>
+        <td>{{ a.page_name }}</td>
+        <td><span class="badge badge-{{ status_class(a.status) }}">{{ status_label(a.status) }}</span></td>
+        <td>{{ a.response_status or '-' }}</td>
+        <td>
+            {% if reviewed %}
+            <span class="badge badge-{{ 'success' if a.review_result == 'baseline_updated' else 'info' }}">
+                {{ {'confirmed_threat':'确认威胁','false_positive':'误报','baseline_updated':'已更新基线'}.get(a.review_result, a.review_result) }}
+            </span>
+            {% else %}
+            <span class="badge badge-warning">未审核</span>
+            {% endif %}
+        </td>
+        <td>
+            <a href="{{ url_for('diff_view', rid=a.id) }}" class="btn btn-sm btn-outline">查看差异</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state">
+    <div class="icon">&#9989;</div>
+    <p>暂无告警</p>
+</div>
+{% endif %}
+{% endblock %}

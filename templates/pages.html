@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ site.name }} - 页面管理{% endblock %}
+{% block content %}
+<div class="page-title">
+    {{ customer.name }} / {{ site.name }} - 页面管理
+    <div class="btn-group">
+        <a href="{{ url_for('page_add', sid=site.id) }}" class="btn btn-primary">+ 添加页面</a>
+        <a href="{{ url_for('sites', cid=customer.id) }}" class="btn btn-outline">返回站点列表</a>
+    </div>
+</div>
+
+{% if pages %}
+{% for p in pages %}
+<div class="card">
+    <div class="flex-between">
+        <div>
+            <strong>{{ p.name }}</strong>
+            <span class="text-muted"> &mdash; <a href="{{ p.url }}" target="_blank" style="color:#1a73e8;">{{ p.url }}</a></span>
+            {% if not p.enabled %}<span class="badge badge-secondary">已暂停</span>{% endif %}
+            <div class="text-muted" style="margin-top:4px;">
+                基线: {% if p.has_baseline %}<span class="text-success">已建立</span>{% else %}<span class="text-warning">未建立</span>{% endif %}
+                | 最后检测: {{ format_dt(p.last_detected) if p.last_detected else '未检测' }}
+                | 状态: <span class="badge badge-{{ status_class(p.last_status) }}">{{ status_label(p.last_status) if p.last_status else '未检测' }}</span>
+            </div>
+        </div>
+        <div class="btn-group">
+            {% if not p.has_baseline %}
+            <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" style="display:inline">
+                <input type="hidden" name="reason" value="初始建立基线">
+                <button class="btn btn-sm btn-success">建立基线</button>
+            </form>
+            {% else %}
+            <a href="{{ url_for('baseline_view', pid=p.id) }}" class="btn btn-sm btn-outline">查看基线</a>
+            <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" style="display:inline" onsubmit="return confirm('重新建基线将覆盖旧基线，确定？');">
+                <input type="hidden" name="reason" value="手动重建基线">
+                <button class="btn btn-sm btn-warning">重建基线</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('page_edit', pid=p.id) }}" class="btn btn-sm btn-outline">编辑</a>
+            <form method="POST" action="{{ url_for('page_delete', pid=p.id) }}" style="display:inline" onsubmit="return confirm('删除该页面？');">
+                <button class="btn btn-sm btn-danger">删除</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <div class="icon">&#128196;</div>
+    <p>该站点下还没有添加页面</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}报告管理{% endblock %}
+{% block content %}
+<div class="page-title">报告管理</div>
+
+<h3 style="margin-bottom: 10px;">手动生成报告</h3>
+<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
+    <form method="POST" action="{{ url_for('report_generate') }}" style="display:flex;gap:8px;align-items:end;">
+        <div class="form-group" style="margin:0;">
+            <label>全量日报</label>
+            <input type="date" name="date" value="{{ today_str() }}">
+        </div>
+        <input type="hidden" name="customer_id" value="">
+        <button type="submit" class="btn btn-primary" style="height:36px;">生成全量日报</button>
+    </form>
+    {% if customers %}
+    <form method="POST" action="{{ url_for('report_generate') }}" style="display:flex;gap:8px;align-items:end;">
+        <div class="form-group" style="margin:0;">
+            <label>客户报告</label>
+            <select name="customer_id">
+                {% for c in customers %}
+                <option value="{{ c.id }}">{{ c.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <input type="date" name="date" value="{{ today_str() }}" style="margin-left:4px;">
+        <button type="submit" class="btn btn-success" style="height:36px;">生成客户报告</button>
+    </form>
+    {% endif %}
+</div>
+
+<h3 style="margin-bottom: 10px;">已生成报告</h3>
+{% if files %}
+<table>
+    <tr><th>文件名</th><th>大小</th><th>生成时间</th><th>操作</th></tr>
+    {% for f in files %}
+    <tr>
+        <td>{{ f.filename }}</td>
+        <td>{{ (f.size / 1024) | round(1) }} KB</td>
+        <td>{{ f.mtime }}</td>
+        <td>
+            <a href="{{ url_for('report_view', filename=f.filename) }}" target="_blank" class="btn btn-sm btn-outline">查看</a>
+            <form method="POST" action="{{ url_for('report_delete', filename=f.filename) }}" style="display:inline">
+                <button class="btn btn-sm btn-danger">删除</button>
+            </form>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state"><p>暂无报告，请先生成</p></div>
+{% endif %}
+{% endblock %}

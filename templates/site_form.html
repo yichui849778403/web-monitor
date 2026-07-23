@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑' if site else '添加' }}站点 - {{ customer.name }}{% endblock %}
+{% block content %}
+<div class="page-title">{{ '编辑' if site else '添加' }}站点</div>
+<form method="POST" style="max-width:500px;">
+    <div class="form-group">
+        <label>站点名称 *</label>
+        <input type="text" name="name" value="{{ site.name if site else '' }}" required placeholder="例如：门户网站">
+    </div>
+    <div class="form-group">
+        <label>域名 *</label>
+        <input type="text" name="domain" value="{{ site.domain if site else '' }}" required placeholder="例如：https://www.xxx.gov.cn">
+        <span class="text-muted">站点的根域名，用于同域名请求间隔控制</span>
+    </div>
+    {% if site %}
+    <div class="form-group">
+        <label>启用状态</label>
+        <select name="enabled">
+            <option value="1" {{ 'selected' if site.enabled else '' }}>启用</option>
+            <option value="0" {{ 'selected' if not site.enabled else '' }}>暂停</option>
+        </select>
+    </div>
+    {% endif %}
+    <div class="form-group">
+        <label>优先级 (1-10，越高检测越频繁)</label>
+        <input type="number" name="priority" value="{{ site.priority if site else 5 }}" min="1" max="10">
+    </div>
+    <div class="form-group">
+        <label>请求间隔 (秒，同域名不同页面之间)</label>
+        <input type="number" name="request_interval" value="{{ site.request_interval if site else 8 }}" min="3" max="120">
+    </div>
+    <div class="btn-group">
+        <button type="submit" class="btn btn-primary">保存</button>
+        <a href="{{ url_for('sites', cid=customer.id) }}" class="btn btn-outline">取消</a>
+    </div>
+</form>
+{% endblock %}

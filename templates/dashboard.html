@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}仪表盘{% endblock %}
+{% block content %}
+<div class="page-title">仪表盘</div>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-label">监控站点</div>
+        <div class="stat-num success">{{ stats.total_sites }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">监控页面</div>
+        <div class="stat-num">{{ stats.total_pages }}</div>
+    </div>
+    <div class="stat-card {{ 'danger' if stats.active_alerts > 0 else '' }}">
+        <div class="stat-label">活跃告警</div>
+        <div class="stat-num">{{ stats.active_alerts }}</div>
+    </div>
+    <div class="stat-card {{ 'warning' if stats.waf_blocked > 0 else '' }}">
+        <div class="stat-label">WAF 封禁</div>
+        <div class="stat-num">{{ stats.waf_blocked }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">今日检测次数</div>
+        <div class="stat-num">{{ stats.today_detections }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">最后检测时间</div>
+        <div class="stat-num" style="font-size:14px;">{{ format_dt(stats.last_detection) if stats.last_detection else '-' }}</div>
+    </div>
+</div>
+
+{% if stats.status_breakdown %}
+<div style="margin-bottom: 20px;">
+    <strong>状态分布：</strong>
+    {% for st, cnt in stats.status_breakdown.items() %}
+    <span class="badge badge-{{ status_class(st) }}">{{ status_label(st) }}: {{ cnt }}</span>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if stats.hourly_detections %}
+<div style="margin-bottom: 20px;">
+    <strong>今日各时段检测量：</strong>
+    <div style="display:flex;align-items:end;gap:4px;height:80px;margin-top:10px;background:#f9f9f9;padding:8px;border-radius:4px;">
+        {% for h in range(24) %}
+        {% set cnt = stats.hourly_detections.get(h, 0) %}
+        <div style="flex:1;text-align:center;">
+            <div style="background:{{ '#d93025' if cnt > 20 else '#1a73e8' }};height:{{ [cnt * 2, 70] | min }}px;border-radius:2px 2px 0 0;min-height:2px;"></div>
+            <span style="font-size:9px;color:#999;">{{ h }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<h3 style="margin: 20px 0 10px;">活跃告警</h3>
+{% if alerts %}
+<table>
+    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>操作</th></tr>
+    {% for a in alerts %}
+    <tr>
+        <td>{{ format_dt(a.detected_at) }}</td>
+        <td>{{ a.customer_name }}</td>
+        <td>{{ a.site_name }}</td>
+        <td><a href="{{ a.url }}" target="_blank" style="color:#1a73e8;">{{ a.page_name }}</a></td>
+        <td><span class="badge badge-{{ status_class(a.status) }}">{{ status_label(a.status) }}</span></td>
+        <td>
+            <a href="{{ url_for('diff_view', rid=a.id) }}" class="btn btn-sm btn-outline">查看差异</a>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state">
+    <div class="icon">&#9989;</div>
+    <p>暂无活跃告警</p>
+</div>
+{% endif %}
+
+<h3 style="margin: 20px 0 10px;">今日检测日志</h3>
+{% if logs %}
+<table>
+    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>状态码</th><th>响应时间</th></tr>
+    {% for l in logs[:30] %}
+    <tr>
+        <td>{{ format_dt(l.created_at) }}</td>
+        <td>{{ l.customer_name }}</td>
+        <td>{{ l.site_name }}</td>
+        <td>{{ l.page_name }}</td>
+        <td><span class="badge badge-{{ status_class(l.status) }}">{{ status_label(l.status) }}</span></td>
+        <td>{{ l.response_status or '-' }}</td>
+        <td>{{ (l.response_time|string) + 's' if l.response_time else '-' }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state"><p>今日暂无检测记录</p></div>
+{% endif %}
+{% endblock %}

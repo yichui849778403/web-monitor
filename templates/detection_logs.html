@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}检测日志{% endblock %}
+{% block content %}
+<div class="page-title">检测日志</div>
+<form method="GET" style="margin-bottom:16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+    <div class="form-group" style="margin:0;">
+        <label>开始日期</label>
+        <input type="date" name="start" value="{{ request.args.get('start', today_str()) }}">
+    </div>
+    <div class="form-group" style="margin:0;">
+        <label>结束日期</label>
+        <input type="date" name="end" value="{{ request.args.get('end', today_str()) }}">
+    </div>
+    <button type="submit" class="btn btn-primary" style="height:36px;">查询</button>
+</form>
+
+{% if logs %}
+<table>
+    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>响应时间</th><th>错误信息</th></tr>
+    {% for l in logs %}
+    <tr>
+        <td>{{ format_dt(l.created_at) }}</td>
+        <td>{{ l.customer_name }}</td>
+        <td>{{ l.site_name }}</td>
+        <td><a href="{{ l.url }}" target="_blank" style="color:#1a73e8;">{{ l.page_name }}</a></td>
+        <td><span class="badge badge-{{ status_class(l.status) }}">{{ status_label(l.status) }}</span></td>
+        <td>{{ l.response_status or '-' }}</td>
+        <td>{{ (l.response_time|string) + 's' if l.response_time else '-' }}</td>
+        <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ l.error_message or '-' }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state"><p>无检测记录</p></div>
+{% endif %}
+{% endblock %}

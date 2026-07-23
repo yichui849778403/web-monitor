@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}基线变更历史{% endblock %}
+{% block content %}
+<div class="page-title">基线变更历史</div>
+{% if entries %}
+<table>
+    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>操作</th><th>原因</th></tr>
+    {% for e in entries %}
+    <tr>
+        <td>{{ format_dt(e.created_at) }}</td>
+        <td>{{ e.customer_name }}</td>
+        <td>{{ e.site_name }}</td>
+        <td>{{ e.page_name }}</td>
+        <td><span class="badge badge-{{ 'info' if e.action == 'create' else 'warning' }}">{{ '新建基线' if e.action == 'create' else '更新基线' }}</span></td>
+        <td>{{ e.reason or '-' }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% else %}
+<div class="empty-state"><p>暂无基线变更记录</p></div>
+{% endif %}
+{% endblock %}

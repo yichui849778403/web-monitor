@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑' if customer else '添加' }}客户{% endblock %}
+{% block content %}
+<div class="page-title">{{ '编辑' if customer else '添加' }}客户</div>
+<form method="POST" style="max-width:500px;">
+    <div class="form-group">
+        <label>客户名称 *</label>
+        <input type="text" name="name" value="{{ customer.name if customer else '' }}" required placeholder="例如：XX市人民政府">
+    </div>
+    <div class="form-group">
+        <label>描述</label>
+        <textarea name="description" placeholder="可选，备注信息">{{ customer.description if customer else '' }}</textarea>
+    </div>
+    <div class="btn-group">
+        <button type="submit" class="btn btn-primary">保存</button>
+        <a href="{{ url_for('customers') }}" class="btn btn-outline">取消</a>
+    </div>
+</form>
+{% endblock %}

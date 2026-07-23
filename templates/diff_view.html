@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}差异对比{% endblock %}
+{% block extra_head %}
+<style>
+    .diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+    .diff-panel { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
+    .diff-panel-header { background: #f5f5f5; padding: 10px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e0e0e0; }
+    .diff-panel-body { padding: 10px; max-height: 500px; overflow: auto; }
+    .diff-panel img { max-width: 100%; border: 1px solid #eee; }
+    .tabs { display: flex; border-bottom: 2px solid #e8e8e8; margin-bottom: 16px; }
+    .tab { padding: 8px 20px; cursor: pointer; border: none; background: none; font-size: 13px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+    .tab.active { color: #1a73e8; border-color: #1a73e8; font-weight: 600; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .change-list { margin-top: 16px; }
+    .change-item { padding: 8px 12px; border-left: 3px solid #e0e0e0; margin-bottom: 8px; background: #fafafa; border-radius: 0 4px 4px 0; }
+    .change-item.malware { border-left-color: #d93025; background: #fce8e6; }
+    .change-item.tamper { border-left-color: #e37400; background: #fef7e0; }
+    .change-item.info { border-left-color: #1a73e8; background: #e8f0fe; }
+    .review-form { margin-top: 20px; padding: 16px; background: #f5f5f5; border-radius: 8px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-title">
+    差异对比 - {{ result.page_name }}
+    <div class="btn-group">
+        <a href="{{ url_for('alerts') }}" class="btn btn-outline btn-sm">返回告警列表</a>
+    </div>
+</div>
+
+<div style="margin-bottom: 16px;">
+    <strong>页面 URL:</strong> <a href="{{ result.url }}" target="_blank" style="color:#1a73e8;">{{ result.url }}</a>
+    | <strong>状态:</strong> <span class="badge badge-{{ status_class(result.status) }}">{{ status_label(result.status) }}</span>
+    | <strong>检测时间:</strong> {{ format_dt(result.detected_at) }}
+    | <strong>响应码:</strong> {{ result.response_status or '-' }}
+    | <strong>响应时间:</strong> {{ (result.response_time|string) + 's' if result.response_time else '-' }}
+    {% if result.screenshot_diff_percent is not none %}
+    | <strong>截图差异:</strong> {{ result.screenshot_diff_percent }}%
+    {% endif %}
+</div>
+
+{% if result.error_message %}
+<div class="alert-box alert-warning">{{ result.error_message }}</div>
+{% endif %}
+
+<div class="tabs">
+    <button class="tab active" onclick="showTab('current')">当前页面 (标注差异)</button>
+    <button class="tab" onclick="showTab('baseline')">原始基线</button>
+    <button class="tab" onclick="showTab('compare')">对比视图</button>
+    <button class="tab" onclick="showTab('screenshot')">截图对比</button>
+</div>
+
+<div id="tab-current" class="tab-content active">
+    <div class="diff-panel">
+        <div class="diff-panel-header">当前页面 (检测于 {{ format_dt(result.detected_at) }})</div>
+        <div class="diff-panel-body">
+            {% if current_html %}
+            <iframe srcdoc="{{ current_html|e }}" style="width:100%;height:500px;border:1px solid #eee;" sandbox="allow-same-origin"></iframe>
+            {% else %}
+            <p class="text-muted">无页面内容</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="tab-baseline" class="tab-content">
+    <div class="diff-panel">
+        <div class="diff-panel-header">原始基线 (建立于 {{ format_dt(baseline.created_at) if baseline else '未知' }})</div>
+        <div class="diff-panel-body">
+            {% if baseline_html %}
+            <iframe srcdoc="{{ baseline_html|e }}" style="width:100%;height:500px;border:1px solid #eee;" sandbox="allow-same-origin"></iframe>
+            {% else %}
+            <p class="text-muted">无基线数据</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div id="tab-compare" class="tab-content">
+    <div class="diff-container">
+        <div class="diff-panel">
+            <div class="diff-panel-header">原始基线</div>
+            <div class="diff-panel-body">
+                {% if baseline_html %}
+                <iframe srcdoc="{{ baseline_html|e }}" style="width:100%;height:400px;border:1px solid #eee;" sandbox="allow-same-origin"></iframe>
+                {% else %}
+                <p class="text-muted">无基线数据</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="diff-panel">
+            <div class="diff-panel-header">当前页面</div>
+            <div class="diff-panel-body">
+                {% if current_html %}
+                <iframe srcdoc="{{ current_html|e }}" style="width:100%;height:400px;border:1px solid #eee;" sandbox="allow-same-origin"></iframe>
+                {% else %}
+                <p class="text-muted">无页面内容</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="tab-screenshot" class="tab-content">
+    <div class="diff-container">
+        <div class="diff-panel">
+            <div class="diff-panel-header">原始基线截图</div>
+            <div class="diff-panel-body">
+                {% if baseline and baseline.screenshot_path and baseline.screenshot_path %}
+                <img src="/data/{{ data_path(baseline.screenshot_path) }}" alt="Baseline Screenshot">
+                {% else %}
+                <p class="text-muted">无基线截图</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="diff-panel">
+            <div class="diff-panel-header">当前截图</div>
+            <div class="diff-panel-body">
+                {% if result.screenshot_path and result.screenshot_path %}
+                <img src="/data/{{ data_path(result.screenshot_path) }}" alt="Current Screenshot">
+                {% else %}
+                <p class="text-muted">无当前截图</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% if result.diff_image_path and result.diff_image_path %}
+    <div class="diff-panel" style="margin-top: 10px;">
+        <div class="diff-panel-header">差异标注 (红色区域为变更部分)</div>
+        <div class="diff-panel-body">
+            <img src="/data/{{ data_path(result.diff_image_path) }}" alt="Diff Image" style="max-width:100%;">
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% if dom_changes %}
+<div class="change-list">
+    <h3 style="margin-bottom:10px;">DOM 变更清单</h3>
+    {% for c in dom_changes %}
+    <div class="change-item {{ c.severity }}">
+        <strong>{{ {'script':'脚本','iframe':'iframe','title':'标题','content':'内容','structure':'结构','link':'外部资源','keyword':'关键词'}.get(c.category, c.category) }}</strong>
+        <span class="badge badge-{{ 'danger' if c.severity == 'malware' else ('warning' if c.severity == 'tamper' else 'info') }}">{{ c.type }}</span>
+        <div style="margin-top: 4px;">{{ c.detail }}</div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if result.reviewed %}
+<div class="alert-box alert-info">
+    该告警已审核: {{ {'confirmed_threat':'确认为威胁','false_positive':'确认为误报','baseline_updated':'已更新基线'}.get(result.review_result, result.review_result) }}
+</div>
+{% else %}
+<div class="review-form">
+    <h4>审核操作</h4>
+    <form method="POST" action="{{ url_for('alert_review', rid=result.id) }}" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
+        <div class="form-group" style="margin:0;">
+            <label>判定结果</label>
+            <select name="result" style="width:auto;">
+                <option value="confirmed_threat">确认威胁</option>
+                <option value="false_positive">确认误报</option>
+                <option value="baseline_updated">确认安全，更新基线</option>
+            </select>
+        </div>
+        <div class="form-group" style="margin:0;flex:1;">
+            <label>备注</label>
+            <input type="text" name="comment" placeholder="审核备注（可选）">
+        </div>
+        <button type="submit" class="btn btn-primary" style="height:36px;">提交审核</button>
+    </form>
+</div>
+{% endif %}
+
+<script>
+function showTab(name) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    document.querySelectorAll('.tab').forEach(el => { if(el.textContent.includes(name === 'current' ? '当前' : name === 'baseline' ? '原始' : name === 'compare' ? '对比' : '截图')) el.classList.add('active'); });
+}
+document.querySelectorAll('.tab').forEach(el => {
+    el.addEventListener('click', function() {
+        var txt = this.textContent;
+        if(txt.includes('当前')) showTab('current');
+        else if(txt.includes('原始')) showTab('baseline');
+        else if(txt.includes('对比')) showTab('compare');
+        else if(txt.includes('截图')) showTab('screenshot');
+    });
+});
+</script>
+{% endblock %}

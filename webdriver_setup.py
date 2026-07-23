@@ -1,0 +1,73 @@
+import os
+import time
+import logging
+from selenium import webdriver
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+
+from config import SCREENSHOT_DIR
+
+logger = logging.getLogger('webdriver')
+
+_driver = None
+
+
+def get_driver():
+    global _driver
+    if _driver is None:
+        try:
+            options = Options()
+            options.add_argument('--headless=new')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--window-size=1920,1080')
+            options.add_argument('--disable-blink-features=AutomationControlled')
+            options.add_experimental_option('excludeSwitches', ['enable-automation'])
+            options.add_experimental_option('useAutomationExtension', False)
+
+            service = Service(EdgeChromiumDriverManager().install())
+            _driver = webdriver.Edge(service=service, options=options)
+            _driver.set_page_load_timeout(30)
+            logger.info('WebDriver initialized successfully')
+        except Exception as e:
+            logger.error(f'WebDriver initialization failed: {e}')
+            raise
+    return _driver
+
+
+def take_screenshot(url, page_id, timestamp):
+    try:
+        driver = get_driver()
+        driver.get(url)
+        time.sleep(2)
+
+        page_width = driver.execute_script(
+            "return Math.max(document.body.scrollWidth, document.body.offsetWidth, "
+            "document.documentElement.clientWidth, document.documentElement.scrollWidth, document.documentElement.offsetWidth);"
+        )
+        page_height = driver.execute_script(
+            "return Math.max(document.body.scrollHeight, document.body.offsetHeight, "
+            "document.documentElement.clientHeight, document.documentElement.scrollHeight, document.documentElement.offsetHeight);"
+        )
+        driver.set_window_size(page_width, page_height)
+
+        ss_dir = os.path.join(SCREENSHOT_DIR, str(page_id))
+        os.makedirs(ss_dir, exist_ok=True)
+        filepath = os.path.join(ss_dir, f'{timestamp}_screen.png')
+        driver.save_screenshot(filepath)
+        return filepath
+    except Exception as e:
+        logger.error(f'Screenshot failed for {url}: {e}')
+        return None
+
+
+def quit_driver():
+    global _driver
+    if _driver:
+        try:
+            _driver.quit()
+        except:
+            pass
+        _driver = None

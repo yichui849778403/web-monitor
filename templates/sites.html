@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ customer.name }} - 站点管理{% endblock %}
+{% block content %}
+<div class="page-title">
+    {{ customer.name }} - 站点管理
+    <div class="btn-group">
+        <a href="{{ url_for('site_add', cid=customer.id) }}" class="btn btn-primary">+ 添加站点</a>
+        <a href="{{ url_for('customers') }}" class="btn btn-outline">返回客户列表</a>
+    </div>
+</div>
+
+{% set bs = get_flashed_messages() %}
+{% for m in bs %}<div class="alert-box alert-info">{{ m }}</div>{% endfor %}
+
+{% if sites %}
+{% for s in sites %}
+<div class="card">
+    <div class="flex-between">
+        <div>
+            <strong>{{ s.name }}</strong>
+            <span class="text-muted"> &mdash; {{ s.domain }}</span>
+            {% if s.id in waf_ids %}<span class="badge badge-danger">WAF 封禁</span>{% endif %}
+            {% if not s.enabled %}<span class="badge badge-secondary">已暂停</span>{% endif %}
+            <div class="text-muted" style="margin-top:4px;">优先级: {{ s.priority }} | 请求间隔: {{ s.request_interval }}s | 页面: {{ s.page_count }} | 告警: {{ s.alert_count }}</div>
+        </div>
+        <div class="btn-group">
+            {% if s.id in waf_ids %}
+            <form method="POST" action="{{ url_for('site_waf_unblock', sid=s.id) }}" style="display:inline">
+                <button class="btn btn-sm btn-warning">解除封禁</button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('pages', sid=s.id) }}" class="btn btn-sm btn-outline">页面管理</a>
+            <a href="{{ url_for('site_edit', sid=s.id) }}" class="btn btn-sm btn-outline">编辑</a>
+            <form method="POST" action="{{ url_for('site_delete', sid=s.id) }}" style="display:inline" onsubmit="return confirm('删除站点将同时删除其下所有页面和检测数据，确定？');">
+                <button class="btn btn-sm btn-danger">删除</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-state">
+    <div class="icon">&#127760;</div>
+    <p>该客户下还没有站点</p>
+</div>
+{% endif %}
+{% endblock %}

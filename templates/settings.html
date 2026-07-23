@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}系统设置{% endblock %}
+{% block content %}
+<div class="page-title">系统设置</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;">
+    <div>
+        <h3 style="margin-bottom:10px;">检测参数</h3>
+        <form method="POST">
+            <div class="form-group">
+                <label>全局请求间隔 (秒)</label>
+                <input type="number" name="global_request_interval" value="{{ config.global_request_interval }}" min="3" max="120">
+                <span class="text-muted">不同域名之间的默认请求间隔</span>
+            </div>
+            <div class="form-group">
+                <label>同域名间隔 (秒)</label>
+                <input type="number" name="same_domain_interval" value="{{ config.same_domain_interval }}" min="10" max="300">
+                <span class="text-muted">同一域名下不同页面之间的请求间隔，用于规避WAF</span>
+            </div>
+            <div class="form-group">
+                <label>请求超时 (秒)</label>
+                <input type="number" name="request_timeout" value="{{ config.request_timeout }}" min="5" max="60">
+            </div>
+            <div class="form-group">
+                <label>重试次数</label>
+                <input type="number" name="retry_count" value="{{ config.retry_count }}" min="1" max="10">
+            </div>
+            <div class="form-group">
+                <label>重试间隔 (分钟)</label>
+                <input type="number" name="retry_interval_minutes" value="{{ config.retry_interval_minutes }}" min="1" max="30">
+            </div>
+            <div class="form-group">
+                <label>截图差异告警阈值 (%)</label>
+                <input type="number" step="0.5" name="screenshot_diff_threshold" value="{{ config.screenshot_diff_threshold }}" min="1" max="50">
+                <span class="text-muted">截图像素变化百分比超过此值触发告警</span>
+            </div>
+            <div class="form-group">
+                <label>报告保留天数</label>
+                <input type="number" name="report_retention_days" value="{{ config.report_retention_days }}" min="7" max="365">
+            </div>
+            <div class="btn-group">
+                <button type="submit" class="btn btn-primary">保存设置</button>
+            </div>
+        </form>
+    </div>
+
+    <div>
+        <h3 style="margin-bottom:10px;">敏感关键词</h3>
+        <p class="text-muted" style="margin-bottom:10px;">检测到这些关键词时触发"挂马"告警。内置关键词不可删除。</p>
+        <form method="POST" action="{{ url_for('keyword_add') }}" style="display:flex;gap:8px;margin-bottom:8px;">
+            <input type="text" name="keyword" placeholder="输入关键词..." required style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
+            <button type="submit" class="btn btn-primary btn-sm">添加</button>
+        </form>
+        <div class="btn-group" style="margin-bottom:12px;">
+            <a href="{{ url_for('keyword_export') }}" class="btn btn-sm btn-outline">导出 TXT</a>
+            <form method="POST" action="{{ url_for('keyword_import') }}" enctype="multipart/form-data" style="display:flex;align-items:center;gap:6px;">
+                <input type="file" name="file" accept=".txt" style="font-size:11px;" required>
+                <button type="submit" class="btn btn-sm btn-outline">导入</button>
+            </form>
+        </div>
+
+        <div style="max-height:400px;overflow:auto;">
+            <table>
+                <tr><th>关键词</th><th>来源</th><th>操作</th></tr>
+                {% set builtin = ['hacked','hacker','defaced','pwned','赌博','博彩','赌场','六合彩','时时彩','色情','成人','裸聊','约炮','黑页','黑客','被黑','backdoor','webshell','shell'] %}
+                {% for kw in builtin %}
+                <tr>
+                    <td><code>{{ kw }}</code></td>
+                    <td><span class="badge badge-secondary">内置</span></td>
+                    <td>-</td>
+                </tr>
+                {% endfor %}
+                {% for kw in keywords %}
+                <tr>
+                    <td><code>{{ kw.keyword }}</code></td>
+                    <td><span class="badge badge-info">自定义</span></td>
+                    <td>
+                        <form method="POST" action="{{ url_for('keyword_delete', kid=kw.id) }}" style="display:inline">
+                            <button class="btn btn-sm btn-danger">删除</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
