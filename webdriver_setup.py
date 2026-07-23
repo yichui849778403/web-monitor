@@ -1,6 +1,9 @@
 import os
 import time
+import base64
 import logging
+import subprocess
+import sys
 from selenium import webdriver
 from selenium.webdriver.edge.service import Service
 from selenium.webdriver.edge.options import Options
@@ -46,20 +49,17 @@ def take_screenshot(url, page_id, timestamp, wait_seconds=2):
         driver.get(url)
         time.sleep(wait_seconds)
 
-        page_width = driver.execute_script(
-            "return Math.max(document.body.scrollWidth, document.body.offsetWidth, "
-            "document.documentElement.clientWidth, document.documentElement.scrollWidth, document.documentElement.offsetWidth);"
-        )
-        page_height = driver.execute_script(
-            "return Math.max(document.body.scrollHeight, document.body.offsetHeight, "
-            "document.documentElement.clientHeight, document.documentElement.scrollHeight, document.documentElement.offsetHeight);"
-        )
-        driver.set_window_size(page_width, page_height)
-
         ss_dir = os.path.join(SCREENSHOT_DIR, str(page_id))
         os.makedirs(ss_dir, exist_ok=True)
         filepath = os.path.join(ss_dir, f'{timestamp}_screen.png')
-        driver.save_screenshot(filepath)
+
+        resp = driver.execute_cdp_cmd('Page.captureScreenshot', {
+            'format': 'png',
+            'captureBeyondViewport': True,
+            'fromSurface': True,
+        })
+        with open(filepath, 'wb') as f:
+            f.write(base64.b64decode(resp['data']))
         return filepath
     except Exception as e:
         logger.error(f'Screenshot failed for {url}: {e}')
@@ -97,7 +97,6 @@ def quit_driver():
         except:
             pass
         _driver = None
-    import subprocess, sys
     if sys.platform == 'win32':
         try:
             subprocess.run(['taskkill', '/f', '/im', 'msedgedriver.exe'], capture_output=True)

@@ -457,7 +457,7 @@ class DetectionResult:
             'JOIN pages p ON dr.page_id=p.id '
             'JOIN sites s ON p.site_id=s.id '
             'JOIN customers c ON s.customer_id=c.id '
-            'WHERE dr.status != \'normal\' AND dr.is_retry=0 '
+            'WHERE dr.status NOT IN (\'normal\', \'info\') AND dr.is_retry=0 '
             'ORDER BY dr.detected_at DESC LIMIT ? OFFSET ?',
             (limit, offset)
         ).fetchall()
@@ -525,7 +525,7 @@ class DetectionResult:
         db = get_db()
         row = db.execute(
             'SELECT COUNT(*) as cnt FROM detection_results '
-            'WHERE status != \'normal\' AND is_retry=0 AND reviewed=0'
+            'WHERE status NOT IN (\'normal\', \'info\') AND is_retry=0 AND reviewed=0'
         ).fetchone()
         db.close()
         return row['cnt']
