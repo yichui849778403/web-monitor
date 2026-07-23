@@ -1,5 +1,6 @@
 import os
 import json
+import difflib
 import logging
 from datetime import datetime, timedelta
 
@@ -371,9 +372,23 @@ def diff_view(rid):
 
     dom_changes = json.loads(r['dom_changes']) if r['dom_changes'] else []
 
+    source_diff = None
+    if baseline_html or current_html:
+        bl_lines = baseline_html.splitlines(keepends=True)
+        cr_lines = current_html.splitlines(keepends=True)
+        diff = difflib.HtmlDiff(tabsize=2, wrapcolumn=120)
+        from_time = _format_dt(baseline['created_at']) if baseline else ''
+        to_time = _format_dt(r['detected_at'])
+        source_diff = diff.make_table(
+            bl_lines, cr_lines,
+            fromdesc=f'基线 HTML  ({from_time})' if from_time else '基线 HTML',
+            todesc=f'当前 HTML  ({to_time})',
+            context=False
+        )
+
     return render_template('diff_view.html', result=r, baseline_html=baseline_html,
                            current_html=current_html, dom_changes=dom_changes,
-                           baseline=baseline)
+                           baseline=baseline, source_diff=source_diff)
 
 
 # ---------------------------------------------------------------------------
