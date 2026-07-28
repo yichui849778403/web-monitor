@@ -1,54 +1,94 @@
 {% extends "base.html" %}
 {% block title %}检测规则说明{% endblock %}
+{% block extra_head %}
+<style>
+    .rule-panel .panel-title .rule-num {
+        width: 26px; height: 26px; border-radius: 7px; display: inline-flex;
+        align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff;
+    }
+    .rule-panel table td:first-child { color: var(--text-3); font-size: 12px; }
+    .priority-list { line-height: 2; font-size: 13px; color: var(--text-2); }
+    .priority-list li { margin-left: 20px; }
+    .priority-list strong { color: var(--text); }
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-title">检测规则说明</div>
-<p class="text-muted" style="margin-bottom:20px;">以下列出系统在每次检测中执行的全部判定规则。本页仅作参考，不可修改。</p>
+<p class="text-muted" style="margin-bottom:18px;font-size:13px;">以下列出系统在每次检测中执行的全部判定规则。本页仅作参考，不可修改。</p>
 
-<div class="card">
-    <h3 style="color:#d93025;margin-bottom:10px;">一、挂马检测 (malware)</h3>
-    <table>
-        <tr><th style="width:40px;">#</th><th>规则</th><th style="width:200px;">触发条件</th></tr>
-        <tr><td>1</td><td>新增外部域名脚本</td><td>页面新增了非本站域名的 &lt;script src="..."&gt; 标签</td></tr>
-        <tr><td>2</td><td>内联脚本变更</td><td>页面中内联 &lt;script&gt;...&lt;/script&gt; 的内容与基线不一致</td></tr>
-        <tr><td>3</td><td>新增 iframe</td><td>页面新增了任何 &lt;iframe&gt; 标签 (无论是否有 src)</td></tr>
-        <tr><td>4</td><td>敏感关键词</td><td>页面文本中出现敏感关键词 (赌博/色情/hacked 等)</td></tr>
-        <tr><td>5</td><td>外部 iframe</td><td>页面包含指向外部域名的 iframe (即使基线就有也会标记warning)</td></tr>
-        <tr><td>6</td><td>可疑脚本路径</td><td>脚本 src 包含 "eval" 或 "base64" 等可疑特征</td></tr>
-    </table>
+<div class="panel rule-panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <span class="rule-num" style="background:var(--danger);">一</span>
+            挂马检测（malware）
+        </div>
+        <span class="badge badge-danger">最高优先级</span>
+    </div>
+    <div class="panel-body flush">
+        <table>
+            <tr><th style="width:50px;">#</th><th>规则</th><th style="width:46%;">触发条件</th></tr>
+            <tr><td>1</td><td>新增外部域名脚本</td><td class="text-muted">页面新增了非本站域名的 &lt;script src="..."&gt; 标签</td></tr>
+            <tr><td>2</td><td>内联脚本变更</td><td class="text-muted">页面中内联 &lt;script&gt;...&lt;/script&gt; 的内容与基线不一致</td></tr>
+            <tr><td>3</td><td>新增 iframe</td><td class="text-muted">页面新增了任何 &lt;iframe&gt; 标签（无论是否有 src）</td></tr>
+            <tr><td>4</td><td>敏感关键词</td><td class="text-muted">页面文本中出现敏感关键词（赌博 / 色情 / hacked 等）</td></tr>
+            <tr><td>5</td><td>外部 iframe</td><td class="text-muted">页面包含指向外部域名的 iframe（即使基线就有也会标记 warning）</td></tr>
+            <tr><td>6</td><td>可疑脚本路径</td><td class="text-muted">脚本 src 包含 "eval" 或 "base64" 等可疑特征</td></tr>
+        </table>
+    </div>
 </div>
 
-<div class="card" style="margin-top:16px;">
-    <h3 style="color:#e37400;margin-bottom:10px;">二、篡改检测 (tamper)</h3>
-    <table>
-        <tr><th style="width:40px;">#</th><th>规则</th><th style="width:200px;">触发条件</th></tr>
-        <tr><td>7</td><td>页面标题变更</td><td>&lt;title&gt; 内容与基线不一致</td></tr>
-        <tr><td>8</td><td>新增本站脚本</td><td>页面新增了本站域名的 &lt;script&gt; 标签</td></tr>
-        <tr><td>9</td><td>脚本移除</td><td>基线中存在的 &lt;script&gt; 标签被移除</td></tr>
-        <tr><td>10</td><td>iframe 移除</td><td>基线中存在的 &lt;iframe&gt; 被移除</td></tr>
-        <tr><td>11</td><td>文本内容变化</td><td>页面可见文字长度变化超过 5%</td></tr>
-        <tr><td>12</td><td>页面结构变化</td><td>body 整体 HTML 结构与基线不一致 (body MD5 哈希对比)</td></tr>
-        <tr><td>13</td><td>截图像素差异</td><td>与基线截图对比，像素变化超过阈值 (默认 5%)</td></tr>
-    </table>
+<div class="panel rule-panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <span class="rule-num" style="background:var(--warning);">二</span>
+            篡改检测（tamper）
+        </div>
+        <span class="badge badge-warning">中优先级</span>
+    </div>
+    <div class="panel-body flush">
+        <table>
+            <tr><th style="width:50px;">#</th><th>规则</th><th style="width:46%;">触发条件</th></tr>
+            <tr><td>7</td><td>页面标题变更</td><td class="text-muted">&lt;title&gt; 内容与基线不一致</td></tr>
+            <tr><td>8</td><td>新增本站脚本</td><td class="text-muted">页面新增了本站域名的 &lt;script&gt; 标签</td></tr>
+            <tr><td>9</td><td>脚本移除</td><td class="text-muted">基线中存在的 &lt;script&gt; 标签被移除</td></tr>
+            <tr><td>10</td><td>iframe 移除</td><td class="text-muted">基线中存在的 &lt;iframe&gt; 被移除</td></tr>
+            <tr><td>11</td><td>文本内容变化</td><td class="text-muted">页面可见文字长度变化超过 5%（日期、时间戳等动态文本已归一化）</td></tr>
+            <tr><td>12</td><td>页面结构变化</td><td class="text-muted">body DOM 骨架（标签 + id 序列）与基线不一致；style 数值、构建 hash、时间戳等动态值已归一化，天然抖动不触发</td></tr>
+            <tr><td>13</td><td>截图像素差异</td><td class="text-muted">与基线截图对比，像素变化超过阈值（默认 5%）</td></tr>
+        </table>
+    </div>
 </div>
 
-<div class="card" style="margin-top:16px;">
-    <h3 style="color:#1a73e8;margin-bottom:10px;">三、可达性检测</h3>
-    <table>
-        <tr><th style="width:40px;">#</th><th>规则</th><th style="width:200px;">触发条件</th></tr>
-        <tr><td>14</td><td>HTTP 5xx 状态码</td><td>响应状态码 >= 500（服务器错误）即告警</td></tr>
-        <tr><td>15</td><td>连续失败</td><td>连续 3 次检测失败 (超时/连接失败/HTTP错误) 触发告警</td></tr>
-        <tr><td>16</td><td>WAF 封禁</td><td>同一站点所有页面的 URL 同时返回 403，自动暂停该站点检测</td></tr>
-    </table>
+<div class="panel rule-panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <span class="rule-num" style="background:var(--info);">三</span>
+            可达性检测
+        </div>
+    </div>
+    <div class="panel-body flush">
+        <table>
+            <tr><th style="width:50px;">#</th><th>规则</th><th style="width:46%;">触发条件</th></tr>
+            <tr><td>14</td><td>连续失败</td><td class="text-muted">连续 3 次检测失败触发告警</td></tr>
+        </table>
+    </div>
 </div>
 
-<div class="card" style="margin-top:16px;">
-    <h3 style="color:#666;margin-bottom:10px;">四、优先级说明</h3>
-    <ul style="margin-left:20px;line-height:2;">
-        <li><strong>挂马 (malware)</strong> 优先级最高，即使同时有篡改特征也标记为挂马</li>
-        <li><strong>不可访问</strong> 次之，HTTP 非 200 直接判定为不可访问</li>
-        <li><strong>篡改 (tamper)</strong> 仅在没有挂马和不可访问时才判定</li>
-        <li>关键词检测同时对比 <strong>内置关键词</strong> (系统内置，不可删除) 和 <strong>自定义关键词</strong> (在设置页可自行添加/删除)</li>
-        <li>DOM 对比和截图对比 <strong>并行执行</strong>，结果合并判定，互不影响</li>
-    </ul>
+<div class="panel rule-panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <span class="rule-num" style="background:var(--secondary);">四</span>
+            优先级说明
+        </div>
+    </div>
+    <div class="panel-body">
+        <ul class="priority-list">
+            <li><strong>挂马（malware）</strong>优先级最高，即使同时有篡改特征也标记为挂马</li>
+            <li><strong>不可访问</strong>次之，HTTP 非 200 直接判定为不可访问</li>
+            <li><strong>篡改（tamper）</strong>仅在没有挂马和不可访问时才判定</li>
+            <li>关键词检测同时对比<strong>内置关键词</strong>（系统内置，不可删除）和<strong>自定义关键词</strong>（在设置页可自行添加 / 删除）</li>
+            <li>DOM 对比和截图对比<strong>并行执行</strong>，结果合并判定，互不影响</li>
+            <li>每个页面可配置<strong>忽略区域</strong>（CSS 选择器），对比前剔除地图、轮播、计数器等天然动态区块，在"客户与站点 → 编辑页面"中设置</li>
+        </ul>
+    </div>
 </div>
 {% endblock %}

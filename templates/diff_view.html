@@ -2,174 +2,259 @@
 {% block title %}差异对比{% endblock %}
 {% block extra_head %}
 <style>
-    .diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-    .diff-panel { border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }
-    .diff-panel-header { background: #f5f5f5; padding: 10px 14px; font-weight: 600; font-size: 13px; border-bottom: 1px solid #e0e0e0; }
-    .diff-panel-body { padding: 10px; max-height: 500px; overflow: auto; }
-    .diff-panel img { max-width: 100%; border: 1px solid #eee; }
+    .meta-grid {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px 24px;
+    }
+    .meta-item .meta-k { font-size: 11.5px; color: var(--text-3); margin-bottom: 4px; }
+    .meta-item .meta-v { font-size: 13.5px; font-weight: 500; word-break: break-all; }
 
-    .tabs { display: flex; border-bottom: 2px solid #e8e8e8; margin-bottom: 16px; }
-    .tab { padding: 8px 20px; cursor: pointer; border: none; background: none; font-size: 13px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-    .tab.active { color: #1a73e8; border-color: #1a73e8; font-weight: 600; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    .diff-container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 1100px) { .diff-container { grid-template-columns: 1fr; } }
+    .diff-panel { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: #fff; }
+    .diff-panel-header {
+        background: #f8fafc; padding: 10px 16px; font-weight: 600; font-size: 13px;
+        border-bottom: 1px solid var(--border); color: var(--text-2);
+        display: flex; align-items: center; gap: 8px;
+    }
+    .diff-panel-header .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .diff-panel-body { padding: 12px; max-height: 520px; overflow: auto; }
+    .diff-panel img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; display: block; }
 
-    .change-list { margin-top: 16px; }
-    .change-item { padding: 8px 12px; border-left: 3px solid #e0e0e0; margin-bottom: 8px; background: #fafafa; border-radius: 0 4px 4px 0; }
-    .change-item.malware { border-left-color: #d93025; background: #fce8e6; }
-    .change-item.tamper { border-left-color: #e37400; background: #fef7e0; }
-    .change-item.info { border-left-color: #1a73e8; background: #e8f0fe; }
+    .change-item {
+        padding: 12px 16px; border-left: 3px solid var(--border); margin-bottom: 10px;
+        background: #f8fafc; border-radius: 0 8px 8px 0; font-size: 13px;
+    }
+    .change-item.malware { border-left-color: var(--danger); background: var(--danger-bg); }
+    .change-item.tamper { border-left-color: var(--warning); background: var(--warning-bg); }
+    .change-item.info { border-left-color: var(--info); background: var(--info-bg); }
+    .change-item .change-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .change-item .change-detail { color: var(--text-2); line-height: 1.6; word-break: break-all; }
 
-    .review-form { margin-top: 20px; padding: 16px; background: #f5f5f5; border-radius: 8px; }
+    .review-form-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .review-form-row .form-group { margin: 0; }
+    .review-form-row .form-group.grow { flex: 1; min-width: 200px; }
 
-    .diff-wrapper { overflow-x: auto; border: 1px solid #ddd; border-radius: 8px; }
-    .diff-wrapper table.diff { width: 100%; border-collapse: collapse; font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; table-layout: fixed; min-width: 900px; }
-    .diff-wrapper table.diff colgroup:nth-of-type(1),
-    .diff-wrapper table.diff colgroup:nth-of-type(4) { width: 0; display: none; }
-    .diff-wrapper table.diff colgroup:nth-of-type(2),
-    .diff-wrapper table.diff colgroup:nth-of-type(5) { width: 3%; }
-    .diff-wrapper table.diff colgroup:nth-of-type(3),
-    .diff-wrapper table.diff colgroup:nth-of-type(6) { width: 47%; }
-    .diff-wrapper .diff td { padding: 1px 8px; vertical-align: top; white-space: pre-wrap; word-break: break-all; border: 1px solid #eee; }
-    .diff-wrapper .diff th { background: #f0f0f0; padding: 6px 12px; text-align: center; font-weight: 600; font-size: 12px; border: 1px solid #ddd; }
-    .diff-wrapper .diff .diff_header { background: #f0f0f0 !important; text-align: right; color: #999; padding: 1px 6px; white-space: nowrap; }
-    .diff-wrapper .diff .diff_next { display: none; }
-    .diff-wrapper .diff .diff_add { background: #d4edda !important; color: #155724; }
-    .diff-wrapper .diff .diff_sub { background: #f8d7da !important; color: #721c24; }
-    .diff-wrapper .diff .diff_chg { background: #fff3cd !important; color: #856404; }
+    /* ---------- 源码 diff（git 风格统一视图） ---------- */
+    .udiff-summary {
+        padding: 10px 14px; background: #f8fafc; border: 1px solid var(--border);
+        border-radius: 8px; margin-bottom: 10px; display: flex; gap: 16px;
+        align-items: center; font-size: 12.5px; flex-wrap: wrap;
+    }
+    .ud-stat { font-weight: 600; }
+    .ud-stat.add { color: #047857; }
+    .ud-stat.del { color: #b91c1c; }
+    .ud-stat.chg { color: #b45309; }
+    .ud-stat.dim { color: var(--text-3); font-weight: 400; }
+    .udiff-summary.same { color: var(--text-2); }
+
+    .udiff {
+        border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+        font-family: Consolas, "Courier New", monospace; font-size: 12px; line-height: 1.55;
+    }
+    .ud-line { display: flex; align-items: stretch; }
+    .ud-no {
+        width: 46px; flex-shrink: 0; text-align: right; padding: 1px 8px;
+        color: #a3aec2; background: #f8fafc; user-select: none;
+        border-right: 1px solid #eef2f7; font-variant-numeric: tabular-nums;
+    }
+    .ud-sign { width: 22px; flex-shrink: 0; text-align: center; user-select: none; padding: 1px 0; }
+    .ud-code { flex: 1; padding: 1px 12px; white-space: pre-wrap; word-break: break-all; font-family: inherit; }
+    .ud-line.ctx .ud-code { color: #475569; }
+    .ud-line.del { background: #fef2f2; }
+    .ud-line.del .ud-sign { color: #dc2626; }
+    .ud-line.del .ud-code { color: #7f1d1d; }
+    .ud-line.add { background: #ecfdf5; }
+    .ud-line.add .ud-sign { color: #059669; }
+    .ud-line.add .ud-code { color: #064e3b; }
+    .ud-line mark { border-radius: 3px; padding: 0 1px; }
+    .ud-line mark.dl { background: #fca5a5; color: #7f1d1d; }
+    .ud-line mark.ins { background: #6ee7b7; color: #064e3b; }
+    .ud-fold {
+        padding: 6px 10px; text-align: center; color: var(--text-3); background: #f1f5f9;
+        cursor: pointer; font-size: 11.5px; user-select: none;
+        border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .ud-fold:hover { background: #e2e8f0; color: var(--text-2); }
+    .ud-fold::before { content: '⋯ '; }
+    .ud-fold.open::after { content: '（点击收起）'; }
+    .ud-fold-body { display: none; }
+    .ud-fold-body.open { display: block; }
+
+    .ud-loading { padding: 40px; text-align: center; color: var(--text-3); font-size: 13px; }
+    .ud-loading .baseline-spinner { border-color: rgba(79,109,245,.25); border-top-color: var(--primary); margin-right: 6px; }
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-title">
     差异对比 - {{ result.page_name }}
-    <div class="btn-group">
-        {% if request.referrer and 'alerts' in request.referrer %}
-        <a href="{{ url_for('alerts') }}" class="btn btn-outline btn-sm">返回告警列表</a>
-        {% else %}
-        <a href="{{ url_for('alerts') }}" class="btn btn-outline btn-sm">返回告警列表</a>
+    <a href="{{ url_for('alerts') }}" class="btn btn-outline btn-sm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        返回告警列表
+    </a>
+</div>
+
+<div class="panel">
+    <div class="panel-body">
+        <div class="meta-grid">
+            <div class="meta-item">
+                <div class="meta-k">状态</div>
+                <div class="meta-v"><span class="badge badge-{{ status_class(result.status) }}">{{ status_label(result.status) }}</span></div>
+            </div>
+            <div class="meta-item" style="grid-column: span 2;">
+                <div class="meta-k">页面 URL</div>
+                <div class="meta-v"><a href="{{ result.url }}" target="_blank">{{ result.url }}</a></div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-k">检测时间</div>
+                <div class="meta-v">{{ format_dt(result.detected_at) }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-k">响应码</div>
+                <div class="meta-v">{{ result.response_status or '-' }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-k">响应时间</div>
+                <div class="meta-v">{{ (result.response_time|string) + 's' if result.response_time else '-' }}</div>
+            </div>
+            {% if result.screenshot_diff_percent is not none %}
+            <div class="meta-item">
+                <div class="meta-k">截图差异</div>
+                <div class="meta-v" style="color:var(--danger);font-weight:600;">{{ result.screenshot_diff_percent }}%</div>
+            </div>
+            {% endif %}
+        </div>
+        {% if result.error_message %}
+        <div class="alert-box alert-warning" style="margin-top:16px;margin-bottom:0;">{{ result.error_message }}</div>
         {% endif %}
     </div>
 </div>
 
-<div style="margin-bottom: 16px;">
-    <strong>页面 URL:</strong> <a href="{{ result.url }}" target="_blank" style="color:#1a73e8;">{{ result.url }}</a>
-    | <strong>状态:</strong> <span class="badge badge-{{ status_class(result.status) }}">{{ status_label(result.status) }}</span>
-    | <strong>检测时间:</strong> {{ format_dt(result.detected_at) }}
-    | <strong>响应码:</strong> {{ result.response_status or '-' }}
-    | <strong>响应时间:</strong> {{ (result.response_time|string) + 's' if result.response_time else '-' }}
-    {% if result.screenshot_diff_percent is not none %}
-    | <strong>截图差异:</strong> {{ result.screenshot_diff_percent }}%
-    {% endif %}
-</div>
+<div class="panel">
+    <div class="panel-body">
+        <div class="tabs">
+            <button class="tab active" data-tab="screenshot">截图对比</button>
+            <button class="tab" data-tab="source">源代码对比</button>
+        </div>
 
-{% if result.error_message %}
-<div class="alert-box alert-warning">{{ result.error_message }}</div>
-{% endif %}
+        <div id="tab-screenshot" class="tab-content active">
+            <div class="diff-container">
+                <div class="diff-panel">
+                    <div class="diff-panel-header"><span class="dot" style="background:var(--info);"></span>原始基线截图</div>
+                    <div class="diff-panel-body">
+                        {% if baseline and baseline.screenshot_path %}
+                        <img src="/data/{{ data_path(baseline.screenshot_path) }}" alt="Baseline Screenshot">
+                        {% else %}
+                        <p class="text-muted">无基线截图</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="diff-panel">
+                    <div class="diff-panel-header"><span class="dot" style="background:var(--danger);"></span>当前截图</div>
+                    <div class="diff-panel-body">
+                        {% if result.screenshot_path %}
+                        <img src="/data/{{ data_path(result.screenshot_path) }}" alt="Current Screenshot">
+                        {% else %}
+                        <p class="text-muted">无当前截图</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% if result.diff_image_path %}
+            <div class="diff-panel" style="margin-top:16px;">
+                <div class="diff-panel-header"><span class="dot" style="background:var(--warning);"></span>差异标注（红色区域为变更部分）</div>
+                <div class="diff-panel-body">
+                    <img src="/data/{{ data_path(result.diff_image_path) }}" alt="Diff Image">
+                </div>
+            </div>
+            {% endif %}
+        </div>
 
-<div class="tabs">
-    <button class="tab active" onclick="showTab('screenshot')">截图对比</button>
-    <button class="tab" onclick="showTab('source')">源代码对比</button>
-</div>
-
-<div id="tab-screenshot" class="tab-content active">
-    <div class="diff-container">
-        <div class="diff-panel">
-            <div class="diff-panel-header">原始基线截图</div>
-            <div class="diff-panel-body">
-                {% if baseline and baseline.screenshot_path %}
-                <img src="/data/{{ data_path(baseline.screenshot_path) }}" alt="Baseline Screenshot">
-                {% else %}
-                <p class="text-muted">无基线截图</p>
-                {% endif %}
+        <div id="tab-source" class="tab-content">
+            <div id="source-diff-box" data-url="{{ url_for('diff_source', rid=result.id) }}">
+                <div class="ud-loading"><span class="baseline-spinner"></span>正在生成源码对比…</div>
             </div>
         </div>
-        <div class="diff-panel">
-            <div class="diff-panel-header">当前截图</div>
-            <div class="diff-panel-body">
-                {% if result.screenshot_path %}
-                <img src="/data/{{ data_path(result.screenshot_path) }}" alt="Current Screenshot">
-                {% else %}
-                <p class="text-muted">无当前截图</p>
-                {% endif %}
-            </div>
-        </div>
     </div>
-    {% if result.diff_image_path %}
-    <div class="diff-panel" style="margin-top: 10px;">
-        <div class="diff-panel-header">差异标注 (红色区域为变更部分)</div>
-        <div class="diff-panel-body">
-            <img src="/data/{{ data_path(result.diff_image_path) }}" alt="Diff Image" style="max-width:100%;">
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<div id="tab-source" class="tab-content">
-    {% if source_diff %}
-    <div class="diff-wrapper">
-        {{ source_diff|safe }}
-    </div>
-    {% else %}
-    <p class="text-muted">无可比对的源代码数据</p>
-    {% endif %}
 </div>
 
 {% if dom_changes %}
-<div class="change-list">
-    <h3 style="margin-bottom:10px;">DOM 变更清单</h3>
-    {% for c in dom_changes %}
-    <div class="change-item {{ c.severity }}">
-        <strong>{{ {'script':'脚本','iframe':'iframe','title':'标题','content':'内容','structure':'结构','link':'外部资源','keyword':'关键词'}.get(c.category, c.category) }}</strong>
-        <span class="badge badge-{{ 'danger' if c.severity == 'malware' else ('warning' if c.severity == 'tamper' else 'info') }}">{{ c.type }}</span>
-        <div style="margin-top: 4px;">{{ c.detail }}</div>
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            DOM 变更清单
+            <span class="text-muted" style="font-weight:400;">{{ dom_changes|length }} 项</span>
+        </div>
     </div>
-    {% endfor %}
+    <div class="panel-body">
+        {% for c in dom_changes %}
+        <div class="change-item {{ c.severity }}">
+            <div class="change-head">
+                <strong>{{ {'script':'脚本','iframe':'iframe','title':'标题','content':'内容','structure':'结构','link':'外部资源','keyword':'关键词'}.get(c.category, c.category) }}</strong>
+                <span class="badge badge-{{ 'danger' if c.severity == 'malware' else ('warning' if c.severity == 'tamper' else 'info') }}">{{ c.type }}</span>
+            </div>
+            <div class="change-detail">{{ c.detail }}</div>
+        </div>
+        {% endfor %}
+    </div>
 </div>
 {% endif %}
 
 {% if result.reviewed %}
-<div class="alert-box alert-info">
-    该告警已审核: {{ {'confirmed_threat':'确认为威胁','false_positive':'确认为误报','baseline_updated':'已更新基线'}.get(result.review_result, result.review_result) }}
+<div class="alert-box alert-info" style="margin-bottom:0;">
+    该告警已审核：{{ {'confirmed_threat':'确认为威胁','false_positive':'确认为误报','baseline_updated':'已更新基线'}.get(result.review_result, result.review_result) }}
 </div>
 {% else %}
-<div class="review-form">
-    <h4>审核操作</h4>
-    <form method="POST" action="{{ url_for('alert_review', rid=result.id) }}" style="display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
-        <div class="form-group" style="margin:0;">
-            <label>判定结果</label>
-            <select name="result" style="width:auto;">
-                <option value="confirmed_threat">确认威胁</option>
-                <option value="false_positive">确认误报</option>
-                <option value="baseline_updated">确认安全，更新基线</option>
-            </select>
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            审核操作
         </div>
-        <div class="form-group" style="margin:0;flex:1;">
-            <label>备注</label>
-            <input type="text" name="comment" placeholder="审核备注（可选）">
-        </div>
-        <button type="submit" class="btn btn-primary" style="height:36px;">提交审核</button>
-    </form>
+    </div>
+    <div class="panel-body">
+        <form method="POST" action="{{ url_for('alert_review', rid=result.id) }}" class="review-form-row">
+            <div class="form-group" style="min-width:190px;">
+                <label>判定结果</label>
+                <select name="result">
+                    <option value="confirmed_threat">确认威胁</option>
+                    <option value="false_positive">确认误报</option>
+                    <option value="baseline_updated">确认安全，更新基线</option>
+                </select>
+            </div>
+            <div class="form-group grow">
+                <label>备注</label>
+                <input type="text" name="comment" placeholder="审核备注（可选）">
+            </div>
+            <button type="submit" class="btn btn-primary">提交审核</button>
+        </form>
+    </div>
 </div>
 {% endif %}
 
 <script>
 (function(){
-    document.querySelectorAll('.diff td[nowrap]').forEach(td => td.removeAttribute('nowrap'));
+    var sourceLoaded = false;
+    function loadSourceDiff() {
+        if (sourceLoaded) return;
+        sourceLoaded = true;
+        var box = document.getElementById('source-diff-box');
+        fetch(box.getAttribute('data-url'))
+            .then(function(r){ return r.text(); })
+            .then(function(html){ box.innerHTML = html; })
+            .catch(function(){ box.innerHTML = '<div style="color:#ef4444;padding:16px;">加载失败，请刷新重试</div>'; });
+    }
+    document.querySelectorAll('.tab').forEach(function(el){
+        el.addEventListener('click', function(){
+            var name = this.getAttribute('data-tab');
+            document.querySelectorAll('.tab-content').forEach(function(t){ t.classList.remove('active'); });
+            document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+            document.getElementById('tab-' + name).classList.add('active');
+            this.classList.add('active');
+            if (name === 'source') loadSourceDiff();
+        });
+    });
 })();
-function showTab(name) {
-    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
-    document.getElementById('tab-' + name).classList.add('active');
-    document.querySelectorAll('.tab').forEach(el => {
-        if (el.textContent.includes(name === 'screenshot' ? '截图' : '源代码')) el.classList.add('active');
-    });
-}
-document.querySelectorAll('.tab').forEach(el => {
-    el.addEventListener('click', function() {
-        var txt = this.textContent;
-        if (txt.includes('截图')) showTab('screenshot');
-        else if (txt.includes('源代码')) showTab('source');
-    });
-});
 </script>
 {% endblock %}

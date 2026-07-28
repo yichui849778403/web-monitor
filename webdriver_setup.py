@@ -2,6 +2,7 @@ import os
 import time
 import base64
 import logging
+import threading
 import subprocess
 import sys
 from selenium import webdriver
@@ -14,6 +15,7 @@ from config import SCREENSHOT_DIR
 logger = logging.getLogger('webdriver')
 
 _driver = None
+_driver_lock = threading.Lock()
 
 
 def get_driver():
@@ -46,21 +48,23 @@ def get_driver():
 def take_screenshot(url, page_id, timestamp, wait_seconds=2):
     try:
         driver = get_driver()
-        driver.get(url)
-        time.sleep(wait_seconds)
+        with _driver_lock:
+            driver.set_window_size(1920, 1080)
+            driver.get(url)
+            time.sleep(wait_seconds)
 
-        ss_dir = os.path.join(SCREENSHOT_DIR, str(page_id))
-        os.makedirs(ss_dir, exist_ok=True)
-        filepath = os.path.join(ss_dir, f'{timestamp}_screen.png')
+            ss_dir = os.path.join(SCREENSHOT_DIR, str(page_id))
+            os.makedirs(ss_dir, exist_ok=True)
+            filepath = os.path.join(ss_dir, f'{timestamp}_screen.png')
 
-        resp = driver.execute_cdp_cmd('Page.captureScreenshot', {
-            'format': 'png',
-            'captureBeyondViewport': True,
-            'fromSurface': True,
-        })
-        with open(filepath, 'wb') as f:
-            f.write(base64.b64decode(resp['data']))
-        return filepath
+            resp = driver.execute_cdp_cmd('Page.captureScreenshot', {
+                'format': 'png',
+                'captureBeyondViewport': True,
+                'fromSurface': True,
+            })
+            with open(filepath, 'wb') as f:
+                f.write(base64.b64decode(resp['data']))
+            return filepath
     except Exception as e:
         logger.error(f'Screenshot failed for {url}: {e}')
         return None
@@ -69,21 +73,22 @@ def take_screenshot(url, page_id, timestamp, wait_seconds=2):
 def fetch_rendered(url, wait_seconds=5):
     try:
         driver = get_driver()
-        driver.get(url)
-        time.sleep(wait_seconds)
+        with _driver_lock:
+            driver.get(url)
+            time.sleep(wait_seconds)
 
-        page_width = driver.execute_script(
-            "return Math.max(document.body.scrollWidth, document.body.offsetWidth, "
-            "document.documentElement.clientWidth, document.documentElement.scrollWidth, document.documentElement.offsetWidth);"
-        )
-        page_height = driver.execute_script(
-            "return Math.max(document.body.scrollHeight, document.body.offsetHeight, "
-            "document.documentElement.clientHeight, document.documentElement.scrollHeight, document.documentElement.offsetHeight);"
-        )
-        driver.set_window_size(page_width, page_height)
+            page_width = driver.execute_script(
+                "return Math.max(document.body.scrollWidth, document.body.offsetWidth, "
+                "document.documentElement.clientWidth, document.documentElement.scrollWidth, document.documentElement.offsetWidth);"
+            )
+            page_height = driver.execute_script(
+                "return Math.max(document.body.scrollHeight, document.body.offsetHeight, "
+                "document.documentElement.clientHeight, document.documentElement.scrollHeight, document.documentElement.offsetHeight);"
+            )
+            driver.set_window_size(page_width, page_height)
 
-        html = driver.page_source
-        return html
+            html = driver.page_source
+            return html
     except Exception as e:
         logger.error(f'Render failed for {url}: {e}')
         return None

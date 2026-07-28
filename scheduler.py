@@ -52,7 +52,6 @@ def build_queue():
 
         _queue = deque()
         for domain, domain_pages in sorted(domain_groups.items()):
-            priority = max(dp['priority'] for dp in domain_pages)
             for dp in domain_pages:
                 _queue.append(dp)
 
@@ -86,7 +85,6 @@ def scheduler_loop():
         pid = page['id']
         url = page['url']
         domain = page['domain']
-        site_id = page.get('site_id_for_ref')
 
         _current_task = {'page_id': pid, 'url': url, 'started_at': datetime.now().isoformat()}
         logger.info(f'Detecting: {url}')
@@ -94,8 +92,8 @@ def scheduler_loop():
         try:
             result = run_detection(pid, url, domain)
 
-            if result['status'] in ('timeout', 'connection_error', 'http_error', 'error'):
-                _handle_failure(pid, url, domain, result, site_id)
+            if result['status'] == 'error':
+                _handle_failure(pid, url, domain, result)
             elif result['status'] == 'no_baseline':
                 logger.info(f'No baseline for {url}, skipping')
             else:
@@ -148,7 +146,18 @@ def scheduler_loop():
                                                   msg)
                 else:
                     msg = result.get('error_message', '')
-                    DetectionResult.log_detection(pid, None, result['status'],
+                    rid = DetectionResult.create(
+                        pid, baseline_id, result['status'],
+                        dom_changes=result['dom_changes'],
+                        screenshot_diff_pct=result['screenshot_diff_percent'],
+                        screenshot_path=result['screenshot_path'],
+                        html_path=result['html_path'],
+                        diff_image_path=result['diff_image_path'],
+                        response_status=result['response_status'],
+                        response_time=result['response_time'],
+                        error_message=msg,
+                    )
+                    DetectionResult.log_detection(pid, rid, result['status'],
                                                   result['response_status'],
                                                   result['response_time'],
                                                   msg)
@@ -181,7 +190,7 @@ def scheduler_loop():
             time.sleep(1)
 
 
-def _handle_failure(pid, url, domain, result, site_id):
+def _handle_failure(pid, url, domain, result):
     baseline = Baseline.get_latest(pid)
     baseline_id = baseline['id'] if baseline else None
 
@@ -222,7 +231,7 @@ def _handle_failure(pid, url, domain, result, site_id):
                                           r['response_time'],
                                           r['error_message'])
 
-            if r['status'] not in ('timeout', 'connection_error', 'http_error', 'error'):
+            if r['status'] != 'error':
                 return
         except Exception as e:
             logger.error(f'Retry error: {e}')
@@ -238,28 +247,6 @@ def _handle_failure(pid, url, domain, result, site_id):
                                   result['response_status'],
                                   result['response_time'],
                                   result['error_message'])
-
-    if result['response_status'] == 403 and site_id:
-        _check_waf_block(site_id)
-
-
-def _check_waf_block(site_id):
-    from models import get_db
-    db = get_db()
-    pages = db.execute('SELECT id FROM pages WHERE site_id=? AND enabled=1', (site_id,)).fetchall()
-    all_403 = True
-    for p in pages:
-        last = db.execute(
-            'SELECT response_status FROM detection_results WHERE page_id=? ORDER BY detected_at DESC LIMIT 1',
-            (p['id'],)
-        ).fetchone()
-        if not last or last['response_status'] != 403:
-            all_403 = False
-            break
-    if all_403 and len(pages) > 0:
-        Site.mark_waf_blocked(site_id)
-        logger.warning(f'Site {site_id} 疑似被 WAF 封禁，已自动暂停检测')
-    db.close()
 
 
 def _summarize_changes(changes):

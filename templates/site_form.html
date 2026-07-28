@@ -18,10 +18,6 @@
         </select>
     </div>
     {% endif %}
-    <div class="form-group">
-        <label>优先级 (1-10，越高检测越频繁)</label>
-        <input type="number" name="priority" value="{{ site.priority if site else 5 }}" min="1" max="10">
-    </div>
     <div class="btn-group">
         <button type="submit" class="btn btn-primary">保存</button>
         <button type="button" class="btn btn-outline" onclick="closeModal()">取消</button>
@@ -51,10 +47,6 @@
         </select>
     </div>
     {% endif %}
-    <div class="form-group">
-        <label>优先级 (1-10，越高检测越频繁)</label>
-        <input type="number" name="priority" value="{{ site.priority if site else 5 }}" min="1" max="10">
-    </div>
     <div class="btn-group">
         <button type="submit" class="btn btn-primary">保存</button>
         <a href="{{ url_for('customers', cid=customer.id) }}" class="btn btn-outline">取消</a>

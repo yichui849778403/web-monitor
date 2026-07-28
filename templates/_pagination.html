@@ -1,70 +1,92 @@
 {% macro pagination(url_base, page, total_pages, total, per_page, extra_params={}) %}
 {% if total_pages >= 1 %}
-<div style="display:flex;justify-content:center;align-items:center;gap:5px;margin-top:16px;flex-wrap:wrap;">
-
+<style>
+    .pg-wrap { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 16px 0 4px; flex-wrap: wrap; }
+    .pg-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        min-width: 32px; height: 32px; padding: 0 8px; border-radius: 7px;
+        border: 1px solid var(--border); background: #fff; color: var(--text-2);
+        font-size: 12.5px; text-decoration: none; transition: all .15s; cursor: pointer; font-family: inherit;
+    }
+    .pg-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .pg-btn.current { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; cursor: default; }
+    .pg-btn.disabled { opacity: .45; cursor: default; pointer-events: none; }
+    .pg-ellipsis { color: var(--text-3); padding: 0 2px; }
+    .pg-input {
+        width: 56px; height: 32px; padding: 0 6px; border: 1px solid var(--border); border-radius: 7px;
+        font-size: 12.5px; text-align: center; font-family: inherit;
+    }
+    .pg-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79,109,245,.14); }
+    .pg-select {
+        height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 7px;
+        font-size: 12.5px; color: var(--text-2); font-family: inherit; background: #fff;
+    }
+    .pg-total { color: var(--text-3); font-size: 12.5px; margin-left: 4px; }
+</style>
+<div class="pg-wrap">
     {% if page > 1 %}
-    <a href="{{ url_base }}p={{ page-1 }}&per_page={{ per_page }}" class="btn btn-sm btn-outline">上一页</a>
+    <a href="{{ url_base }}p={{ page-1 }}&per_page={{ per_page }}" class="pg-btn">上一页</a>
     {% else %}
-    <span class="btn btn-sm btn-outline" style="opacity:0.4;cursor:default;">上一页</span>
+    <span class="pg-btn disabled">上一页</span>
     {% endif %}
 
     {% if total_pages <= 7 %}
         {% for pg in range(1, total_pages + 1) %}
             {% if pg == page %}
-            <span class="btn btn-sm btn-primary" style="min-width:30px;">{{ pg }}</span>
+            <span class="pg-btn current">{{ pg }}</span>
             {% else %}
-            <a href="{{ url_base }}p={{ pg }}&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">{{ pg }}</a>
+            <a href="{{ url_base }}p={{ pg }}&per_page={{ per_page }}" class="pg-btn">{{ pg }}</a>
             {% endif %}
         {% endfor %}
     {% else %}
         {% if page > 2 %}
-        <a href="{{ url_base }}p=1&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">1</a>
+        <a href="{{ url_base }}p=1&per_page={{ per_page }}" class="pg-btn">1</a>
         {% else %}
-        <span class="btn btn-sm btn-primary" style="min-width:30px;">1</span>
+        <span class="pg-btn current">1</span>
         {% endif %}
 
-        {% if page > 3 %}<span style="color:#999;padding:4px;">...</span>{% endif %}
+        {% if page > 3 %}<span class="pg-ellipsis">…</span>{% endif %}
 
         {% set start = [page - 1, 2] | max %}
         {% set end = [page + 1, total_pages - 1] | min %}
         {% for pg in range(start, end + 1) %}
             {% if pg == page %}
-            <span class="btn btn-sm btn-primary" style="min-width:30px;">{{ pg }}</span>
+            <span class="pg-btn current">{{ pg }}</span>
             {% else %}
-            <a href="{{ url_base }}p={{ pg }}&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">{{ pg }}</a>
+            <a href="{{ url_base }}p={{ pg }}&per_page={{ per_page }}" class="pg-btn">{{ pg }}</a>
             {% endif %}
         {% endfor %}
 
-        {% if page < total_pages - 2 %}<span style="color:#999;padding:4px;">...</span>{% endif %}
+        {% if page < total_pages - 2 %}<span class="pg-ellipsis">…</span>{% endif %}
 
         {% if page < total_pages - 1 %}
-        <a href="{{ url_base }}p={{ total_pages }}&per_page={{ per_page }}" class="btn btn-sm btn-outline" style="min-width:30px;">{{ total_pages }}</a>
+        <a href="{{ url_base }}p={{ total_pages }}&per_page={{ per_page }}" class="pg-btn">{{ total_pages }}</a>
         {% else %}
-        <span class="btn btn-sm btn-primary" style="min-width:30px;">{{ total_pages }}</span>
+        <span class="pg-btn current">{{ total_pages }}</span>
         {% endif %}
     {% endif %}
 
     {% if page < total_pages %}
-    <a href="{{ url_base }}p={{ page+1 }}&per_page={{ per_page }}" class="btn btn-sm btn-outline">下一页</a>
+    <a href="{{ url_base }}p={{ page+1 }}&per_page={{ per_page }}" class="pg-btn">下一页</a>
     {% else %}
-    <span class="btn btn-sm btn-outline" style="opacity:0.4;cursor:default;">下一页</span>
+    <span class="pg-btn disabled">下一页</span>
     {% endif %}
 
-    <form method="GET" action="{{ url_base }}" onsubmit="var inp=this.querySelector('[name=p]');var p=parseInt(inp.value);if(!p||p<1||p>{{ total_pages }}){alert('请输入 1-{{ total_pages }} 的页码');return false;}" style="display:inline;margin-left:6px;">
+    <form method="GET" action="{{ url_base }}" onsubmit="var inp=this.querySelector('[name=p]');var p=parseInt(inp.value);if(!p||p<1||p>{{ total_pages }}){alert('请输入 1-{{ total_pages }} 的页码');return false;}" style="display:inline;margin-left:8px;">
         {% for k,v in extra_params.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
         <input type="hidden" name="per_page" value="{{ per_page }}">
-        <input type="number" name="p" min="1" max="{{ total_pages }}" placeholder="页" style="width:60px;padding:5px 8px;border:1px solid #ddd;border-radius:3px;font-size:12px;text-align:center;">
-        <button type="submit" class="btn btn-sm btn-outline" style="padding:4px 8px;">跳转</button>
+        <input type="number" name="p" min="1" max="{{ total_pages }}" placeholder="页" class="pg-input">
+        <button type="submit" class="pg-btn">跳转</button>
     </form>
 
-    <form method="GET" action="{{ url_base }}" style="display:inline;margin-left:4px;">
+    <form method="GET" action="{{ url_base }}" style="display:inline;margin-left:6px;">
         {% for k,v in extra_params.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
         <input type="hidden" name="p" value="1">
-        <select name="per_page" onchange="this.form.submit()" style="padding:4px 8px;border:1px solid #ddd;border-radius:3px;font-size:12px;">
+        <select name="per_page" onchange="this.form.submit()" class="pg-select">
             {% for n in [10,20,30,50,100] %}<option value="{{ n }}" {{ 'selected' if per_page == n }}>{{ n }} 条/页</option>{% endfor %}
         </select>
     </form>
-    <span class="text-muted" style="margin-left:4px;">共 {{ total }} 条</span>
+    <span class="pg-total">共 {{ total }} 条</span>
 </div>
 {% endif %}
 {% endmacro %}

@@ -36,10 +36,7 @@ def init_db():
             name TEXT NOT NULL,
             domain TEXT NOT NULL,
             enabled INTEGER DEFAULT 1,
-            priority INTEGER DEFAULT 5,
             request_interval INTEGER DEFAULT 8,
-            waf_blocked INTEGER DEFAULT 0,
-            waf_blocked_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT (datetime('now','localtime')),
             updated_at TIMESTAMP DEFAULT (datetime('now','localtime'))
         );
@@ -50,7 +47,7 @@ def init_db():
             name TEXT NOT NULL,
             url TEXT NOT NULL,
             enabled INTEGER DEFAULT 1,
-            render_wait INTEGER DEFAULT 0,
+            render_wait INTEGER DEFAULT 5,
             created_at TIMESTAMP DEFAULT (datetime('now','localtime')),
             updated_at TIMESTAMP DEFAULT (datetime('now','localtime'))
         );
@@ -123,7 +120,23 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_history_page ON baseline_history(page_id);
     ''')
     try:
-        c.execute("ALTER TABLE pages ADD COLUMN render_wait INTEGER DEFAULT 0")
+        c.execute("ALTER TABLE pages ADD COLUMN render_wait INTEGER DEFAULT 5")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE pages ADD COLUMN ignore_selectors TEXT DEFAULT ''")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE sites DROP COLUMN priority")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE sites DROP COLUMN waf_blocked")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        c.execute("ALTER TABLE sites DROP COLUMN waf_blocked_at")
     except sqlite3.OperationalError:
         pass
     conn.commit()
@@ -194,7 +207,7 @@ class Site:
         db = get_db()
         rows = db.execute(
             'SELECT s.*, (SELECT COUNT(*) FROM pages WHERE site_id=s.id AND enabled=1) as page_count '
-            'FROM sites s WHERE s.enabled=1 AND s.waf_blocked=0 ORDER BY s.priority DESC'
+            'FROM sites s WHERE s.enabled=1 ORDER BY s.created_at DESC'
         ).fetchall()
         db.close()
         return [dict(r) for r in rows]
@@ -207,11 +220,11 @@ class Site:
         return dict(row) if row else None
 
     @staticmethod
-    def create(customer_id, name, domain, priority=5):
+    def create(customer_id, name, domain):
         db = get_db()
         db.execute(
-            'INSERT INTO sites (customer_id, name, domain, priority) VALUES (?, ?, ?, ?)',
-            (customer_id, name, domain.rstrip('/'), priority)
+            'INSERT INTO sites (customer_id, name, domain) VALUES (?, ?, ?)',
+            (customer_id, name, domain.rstrip('/'))
         )
         db.commit()
         sid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
@@ -219,11 +232,11 @@ class Site:
         return sid
 
     @staticmethod
-    def update(sid, name, domain, enabled, priority):
+    def update(sid, name, domain, enabled):
         db = get_db()
         db.execute(
-            "UPDATE sites SET name=?, domain=?, enabled=?, priority=?, updated_at=datetime('now','localtime') WHERE id=?",
-            (name, domain.rstrip('/'), enabled, priority, sid)
+            "UPDATE sites SET name=?, domain=?, enabled=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, domain.rstrip('/'), enabled, sid)
         )
         db.commit()
         db.close()
@@ -234,27 +247,6 @@ class Site:
         db.execute('DELETE FROM sites WHERE id=?', (sid,))
         db.commit()
         db.close()
-
-    @staticmethod
-    def mark_waf_blocked(sid):
-        db = get_db()
-        db.execute("UPDATE sites SET waf_blocked=1, waf_blocked_at=datetime('now','localtime') WHERE id=?", (sid,))
-        db.commit()
-        db.close()
-
-    @staticmethod
-    def mark_waf_unblocked(sid):
-        db = get_db()
-        db.execute('UPDATE sites SET waf_blocked=0, waf_blocked_at=NULL WHERE id=?', (sid,))
-        db.commit()
-        db.close()
-
-    @staticmethod
-    def get_waf_blocked_sites():
-        db = get_db()
-        rows = db.execute('SELECT s.*, c.name as customer_name FROM sites s JOIN customers c ON s.customer_id=c.id WHERE s.waf_blocked=1').fetchall()
-        db.close()
-        return [dict(r) for r in rows]
 
 
 class Page:
@@ -276,12 +268,12 @@ class Page:
     def list_all_enabled():
         db = get_db()
         rows = db.execute(
-            'SELECT p.*, s.id as site_id_for_ref, s.domain, s.priority, s.waf_blocked '
+            'SELECT p.*, s.id as site_id_for_ref, s.domain '
             'FROM pages p '
             'JOIN sites s ON p.site_id=s.id '
-            'WHERE p.enabled=1 AND s.enabled=1 AND s.waf_blocked=0 '
+            'WHERE p.enabled=1 AND s.enabled=1 '
             'AND EXISTS (SELECT 1 FROM baselines WHERE page_id=p.id) '
-            'ORDER BY s.priority DESC, p.id ASC'
+            'ORDER BY s.id ASC, p.id ASC'
         ).fetchall()
         db.close()
         return [dict(r) for r in rows]
@@ -298,20 +290,20 @@ class Page:
         return dict(row) if row else None
 
     @staticmethod
-    def create(site_id, name, url, render_wait=0):
+    def create(site_id, name, url, render_wait=5, ignore_selectors=''):
         db = get_db()
-        db.execute('INSERT INTO pages (site_id, name, url, render_wait) VALUES (?, ?, ?, ?)', (site_id, name, url, render_wait))
+        db.execute('INSERT INTO pages (site_id, name, url, render_wait, ignore_selectors) VALUES (?, ?, ?, ?, ?)', (site_id, name, url, render_wait, ignore_selectors))
         db.commit()
         pid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.close()
         return pid
 
     @staticmethod
-    def update(pid, name, url, enabled, render_wait=0):
+    def update(pid, name, url, enabled, render_wait=5, ignore_selectors=''):
         db = get_db()
         db.execute(
-            "UPDATE pages SET name=?, url=?, enabled=?, render_wait=?, updated_at=datetime('now','localtime') WHERE id=?",
-            (name, url, enabled, render_wait, pid)
+            "UPDATE pages SET name=?, url=?, enabled=?, render_wait=?, ignore_selectors=?, updated_at=datetime('now','localtime') WHERE id=?",
+            (name, url, enabled, render_wait, ignore_selectors, pid)
         )
         db.commit()
         db.close()
@@ -601,11 +593,6 @@ class DetectionResult:
             'WHERE status NOT IN (\'normal\', \'info\') AND is_retry=0 AND reviewed=0'
         ).fetchone()['cnt']
         stats['active_alerts'] = alerts
-
-        waf_blocked = db.execute(
-            'SELECT COUNT(*) as cnt FROM sites WHERE waf_blocked=1'
-        ).fetchone()['cnt']
-        stats['waf_blocked'] = waf_blocked
 
         last_detection = db.execute(
             'SELECT detected_at FROM detection_results ORDER BY detected_at DESC LIMIT 1'

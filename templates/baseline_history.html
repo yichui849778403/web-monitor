@@ -2,23 +2,33 @@
 {% import "_pagination.html" as pg %}
 {% block title %}基线变更历史{% endblock %}
 {% block content %}
-<div class="page-title">基线变更历史</div>
-{% if entries %}
-<table>
-    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>操作</th><th>原因</th></tr>
-    {% for e in entries %}
-    <tr>
-        <td>{{ format_dt(e.created_at) }}</td>
-        <td>{{ e.customer_name }}</td>
-        <td>{{ e.site_name }}</td>
-        <td>{{ e.page_name }}</td>
-        <td><span class="badge badge-{{ 'info' if e.action == 'create' else 'warning' }}">{{ '新建基线' if e.action == 'create' else '更新基线' }}</span></td>
-        <td>{{ e.reason or '-' }}</td>
-    </tr>
-    {% endfor %}
-</table>
-{{ pg.pagination('?', page, total_pages, total, per_page) }}
-{% else %}
-<div class="empty-state"><p>暂无基线变更记录</p></div>
-{% endif %}
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+            基线变更记录
+            {% if total %}<span class="text-muted" style="font-weight:400;">共 {{ total }} 条</span>{% endif %}
+        </div>
+    </div>
+    <div class="panel-body flush">
+        {% if entries %}
+        <table>
+            <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>操作</th><th>原因</th></tr>
+            {% for e in entries %}
+            <tr>
+                <td class="text-muted">{{ format_dt(e.created_at) }}</td>
+                <td>{{ e.customer_name }}</td>
+                <td>{{ e.site_name }}</td>
+                <td>{{ e.page_name }}</td>
+                <td><span class="badge badge-{{ 'info' if e.action == 'create' else 'warning' }}">{{ '新建基线' if e.action == 'create' else '更新基线' }}</span></td>
+                <td class="text-muted">{{ e.reason or '-' }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+        {{ pg.pagination('?', page, total_pages, total, per_page) }}
+        {% else %}
+        <div class="empty-state"><p>暂无基线变更记录</p></div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

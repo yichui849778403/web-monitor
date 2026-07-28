@@ -2,53 +2,67 @@
 {% block title %}基线预览 - {{ page.name }}{% endblock %}
 {% block extra_head %}
 <style>
-    .baseline-tabs { display: flex; border-bottom: 2px solid #e8e8e8; margin-bottom: 16px; }
-    .baseline-tabs button { padding: 8px 20px; cursor: pointer; border: none; background: none; font-size: 13px; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-    .baseline-tabs button.active { color: #1a73e8; border-color: #1a73e8; font-weight: 600; }
-    .baseline-panel { display: none; }
-    .baseline-panel.active { display: block; }
-    .baseline-panel img { max-width: 100%; border: 1px solid #eee; }
+    .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px 24px; }
+    .meta-item .meta-k { font-size: 11.5px; color: var(--text-3); margin-bottom: 4px; }
+    .meta-item .meta-v { font-size: 13.5px; font-weight: 500; word-break: break-all; }
+    .baseline-panel-body img { max-width: 100%; border: 1px solid var(--border); border-radius: 6px; display: block; margin: 0 auto; }
+    .src-pre {
+        max-height: 600px; overflow: auto; background: #0f172a; color: #d4deee;
+        padding: 16px; font-size: 12px; line-height: 1.6; border-radius: 8px;
+        white-space: pre-wrap; word-break: break-all; font-family: Consolas, "Courier New", monospace;
+    }
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-title">
     基线预览 - {{ page.name }}
-    <div class="btn-group">
-        <a href="{{ url_for('customers', cid=page.customer_id) }}" class="btn btn-outline btn-sm">返回</a>
-    </div>
+    <a href="{{ url_for('customers', cid=page.customer_id) }}" class="btn btn-outline btn-sm">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        返回
+    </a>
 </div>
 
-<div style="margin-bottom:12px;">
-    <strong>URL:</strong> <a href="{{ page.url }}" target="_blank" style="color:#1a73e8;">{{ page.url }}</a>
-    | <strong>客户:</strong> {{ page.customer_name }}
-    | <strong>站点:</strong> {{ page.site_name }}
-    | <strong>基线建立时间:</strong> {{ format_dt(baseline.created_at) }}
-</div>
-
-<div class="baseline-tabs">
-    <button class="active" onclick="showBaselineTab('screenshot')">截图</button>
-    <button onclick="showBaselineTab('html')">页面源码</button>
-</div>
-
-<div id="baseline-tab-screenshot" class="baseline-panel active">
-    <div class="diff-panel">
-        <div class="diff-panel-header">基线截图</div>
-        <div class="diff-panel-body" style="text-align:center;">
-            {% if baseline.screenshot_path and baseline.screenshot_path %}
-            <img src="/data/{{ data_path(baseline.screenshot_path) }}" alt="Baseline Screenshot" style="max-width:100%;">
-            {% else %}
-            <p class="text-muted">无截图数据</p>
-            {% endif %}
+<div class="panel">
+    <div class="panel-body">
+        <div class="meta-grid">
+            <div class="meta-item" style="grid-column: span 2;">
+                <div class="meta-k">URL</div>
+                <div class="meta-v"><a href="{{ page.url }}" target="_blank">{{ page.url }}</a></div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-k">客户</div>
+                <div class="meta-v">{{ page.customer_name }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-k">站点</div>
+                <div class="meta-v">{{ page.site_name }}</div>
+            </div>
+            <div class="meta-item">
+                <div class="meta-k">基线建立时间</div>
+                <div class="meta-v">{{ format_dt(baseline.created_at) }}</div>
+            </div>
         </div>
     </div>
 </div>
 
-<div id="baseline-tab-html" class="baseline-panel">
-    <div class="diff-panel">
-        <div class="diff-panel-header">页面渲染效果</div>
-        <div class="diff-panel-body">
+<div class="panel">
+    <div class="panel-body">
+        <div class="tabs">
+            <button class="tab active" data-tab="screenshot">截图</button>
+            <button class="tab" data-tab="html">页面源码</button>
+        </div>
+
+        <div id="tab-screenshot" class="tab-content active baseline-panel-body">
+            {% if baseline.screenshot_path %}
+            <img src="/data/{{ data_path(baseline.screenshot_path) }}" alt="Baseline Screenshot">
+            {% else %}
+            <p class="text-muted">无截图数据</p>
+            {% endif %}
+        </div>
+
+        <div id="tab-html" class="tab-content">
             {% if baseline_html %}
-            <iframe srcdoc="{{ baseline_html|e }}" style="width:100%;height:600px;border:1px solid #eee;" sandbox="allow-same-origin"></iframe>
+            <pre class="src-pre">{{ baseline_html }}</pre>
             {% else %}
             <p class="text-muted">无 HTML 数据</p>
             {% endif %}
@@ -57,19 +71,16 @@
 </div>
 
 <script>
-function showBaselineTab(name) {
-    document.querySelectorAll('.baseline-panel').forEach(el => el.classList.remove('active'));
-    document.querySelectorAll('.baseline-tabs button').forEach(el => el.classList.remove('active'));
-    document.getElementById('baseline-tab-' + name).classList.add('active');
-    document.querySelectorAll('.baseline-tabs button').forEach(el => {
-        if (el.textContent.includes(name === 'screenshot' ? '截图' : '源码')) el.classList.add('active');
+(function(){
+    document.querySelectorAll('.tab').forEach(function(el){
+        el.addEventListener('click', function(){
+            var name = this.getAttribute('data-tab');
+            document.querySelectorAll('.tab-content').forEach(function(t){ t.classList.remove('active'); });
+            document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
+            document.getElementById('tab-' + name).classList.add('active');
+            this.classList.add('active');
+        });
     });
-}
-document.querySelectorAll('.baseline-tabs button').forEach(el => {
-    el.addEventListener('click', function() {
-        if (this.textContent.includes('截图')) showBaselineTab('screenshot');
-        else showBaselineTab('html');
-    });
-});
+})();
 </script>
 {% endblock %}

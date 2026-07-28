@@ -3,19 +3,54 @@ import re
 import time
 import hashlib
 import json
-import random
-import requests
-import urllib3
+import logging
 from datetime import datetime
 from bs4 import BeautifulSoup
 from PIL import Image, ImageChops, ImageDraw
 from io import BytesIO
 
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
 from config import load_config, BASELINE_DIR, SCREENSHOT_DIR
 from models import Baseline, DetectionResult, CustomKeyword, Page
 from webdriver_setup import take_screenshot, fetch_rendered
+
+UUID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
+TIMESTAMP_MS_RE = re.compile(r'\b\d{13}\b')
+TIMESTAMP_SEC_RE = re.compile(r'\b\d{10}\b')
+NONCE_RE = re.compile(r'nonce\s*=\s*["\'][^"\']+["\']', re.IGNORECASE)
+# 日期时间文本：2026-07-28 / 2026/07/28 / 08:34:55 / 08:34
+# 用数字环视代替 \b（中文字符与数字之间没有 \b 边界）
+DATE_RE = re.compile(r'(?<!\d)\d{4}[-/年]\d{1,2}[-/月]\d{1,2}日?(?!\d)')
+TIME_RE = re.compile(r'(?<!\d)\d{1,2}:\d{2}(:\d{2})?(?!\d)')
+# 文件名中的构建 hash：chunk-f2820e3c.js / app.486a48a6.css / main_b8d5b9dc
+FILE_HASH_RE = re.compile(r'([\-._])[0-9a-f]{8,}(?=[.\s"\']|$)', re.IGNORECASE)
+# URL 查询串中的时间戳/随机参数：?_t= / &t= / &v= / &timestamp= / &r=
+QUERY_TS_RE = re.compile(r'([?&](?:_?t|v|ts|timestamp|rand|r|_)=)[^&"\'\s]*', re.IGNORECASE)
+# style 属性内的动态数值：translate3d(-6px, 0px, 0px) / width: 123.5px / left: 50%
+STYLE_NUM_RE = re.compile(r'-?\d+\.?\d*(px|%|em|rem|vh|vw|vmin|vmax|s|ms|deg|fr)?')
+
+
+def _normalize_style_attr(match):
+    """style="..." 内的数值全部归一化，消灭 translate/宽高抖动。"""
+    return 'style="' + STYLE_NUM_RE.sub('N', match.group(1)) + '"'
+
+
+def _normalize_html(html):
+    """归一化动态值，让"骨架相同"的页面指纹稳定。
+
+    覆盖：UUID、nonce、时间戳(10/13位)、日期时间文本、文件名构建 hash、
+    URL 时间戳参数、style 属性内的全部数值。
+    """
+    html = UUID_RE.sub('[UUID]', html)
+    html = NONCE_RE.sub('nonce="[NONCE]"', html)
+    html = TIMESTAMP_MS_RE.sub('[TS]', html)
+    html = TIMESTAMP_SEC_RE.sub('[TS]', html)
+    html = DATE_RE.sub('[DATE]', html)
+    html = TIME_RE.sub('[TIME]', html)
+    html = FILE_HASH_RE.sub(r'\1[H]', html)
+    html = QUERY_TS_RE.sub(r'\1[V]', html)
+    html = re.sub(r'style\s*=\s*"([^"]*)"', _normalize_style_attr, html)
+    html = re.sub(r"style\s*=\s*'([^']*)'", _normalize_style_attr, html)
+    return html
 
 
 def load_webdriver():
@@ -33,29 +68,42 @@ def scan_keywords(text):
     return found
 
 
-def fetch_page(url, config):
-    ua = random.choice(config['user_agents'])
-    headers = {
-        'User-Agent': ua,
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        'Accept-Encoding': 'gzip, deflate',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-    }
-    resp = requests.get(
-        url,
-        headers=headers,
-        timeout=config['request_timeout'],
-        allow_redirects=True,
-        verify=False,
-    )
-    resp.encoding = resp.apparent_encoding or 'utf-8'
-    return resp
 
 
-def extract_dom_fingerprint(html):
+ID_NUM_RE = re.compile(r'\d{4,}')
+
+
+def _skeleton_fingerprint(body):
+    """结构指纹：body 后代元素的 tag#id 前序序列。
+
+    只保留标签名和 id（id 中 4+ 位连续数字归一化），不含 class/style/
+    data-*/文本——这些"表皮"抖动交给 text_hash 和专项对比，骨架变化
+    （节点增删、标签替换、层级移动）才判定为结构变化。
+    """
+    parts = []
+    for el in body.descendants:
+        if not getattr(el, 'name', None):
+            continue
+        eid = el.get('id', '')
+        if eid:
+            eid = ID_NUM_RE.sub('N', eid)
+            parts.append('%s#%s' % (el.name, eid))
+        else:
+            parts.append(el.name)
+    return hashlib.md5('>'.join(parts).encode()).hexdigest()
+
+
+def extract_dom_fingerprint(html, ignore_selectors=''):
     soup = BeautifulSoup(html, 'lxml')
+
+    # 忽略区域：对比前直接剔除（地图/轮播/实时数据等天然动态区块）
+    if ignore_selectors:
+        for sel in [s.strip() for s in ignore_selectors.splitlines() if s.strip()]:
+            try:
+                for el in soup.select(sel):
+                    el.decompose()
+            except Exception:
+                logging.getLogger('detector').warning(f'无效忽略选择器已跳过: {sel}')
 
     title = soup.title.string.strip() if soup.title and soup.title.string else ''
 
@@ -63,23 +111,24 @@ def extract_dom_fingerprint(html):
     for s in soup.find_all('script'):
         src = s.get('src', '')
         if src:
-            scripts.append({'src': src, 'type': 'external'})
+            scripts.append({'src': _normalize_html(src), 'type': 'external'})
         else:
             content = s.string or ''
+            content = _normalize_html(content)
             h = hashlib.md5(content.strip().encode()).hexdigest()
             scripts.append({'src': '', 'type': 'inline', 'hash': h})
 
     iframes = []
     for f in soup.find_all('iframe'):
         iframes.append({
-            'src': f.get('src', ''),
+            'src': _normalize_html(f.get('src', '')),
             'width': f.get('width', ''),
             'height': f.get('height', ''),
         })
 
     links = []
     for l in soup.find_all('link', rel='stylesheet'):
-        links.append(l.get('href', ''))
+        links.append(_normalize_html(l.get('href', '')))
 
     meta_tags = []
     for m in soup.find_all('meta'):
@@ -89,18 +138,19 @@ def extract_dom_fingerprint(html):
         })
 
     visible_text = soup.get_text(separator=' ', strip=True)
+    visible_text = _normalize_html(visible_text)
     text_hash = hashlib.md5(visible_text.encode()).hexdigest()
     text_length = len(visible_text)
 
-    body_html = ''
+    body_hash = ''
     body = soup.find('body')
     if body:
         for tag in body.find_all(['script', 'style']):
             tag.decompose()
-        body_html = str(body)
-    body_hash = hashlib.md5(body_html.encode()).hexdigest()
+        body_hash = _skeleton_fingerprint(body)
 
     return {
+        '_version': 3,
         'title': title,
         'title_hash': hashlib.md5(title.encode()).hexdigest(),
         'scripts': scripts,
@@ -252,7 +302,7 @@ def compare_dom(baseline_fp, current_fp, domain):
             'type': 'body_changed',
             'severity': 'tamper',
             'value': '',
-            'detail': '页面主体结构发生变化',
+            'detail': '页面 DOM 骨架发生变化（节点增删/标签替换/层级变动）',
         })
 
     return changes
@@ -311,7 +361,7 @@ def compare_screenshots(baseline_path, current_path, diff_output_path, threshold
         return -1, None
 
 
-def evaluate_rules(dom_changes, screenshot_diff_pct, response_status, suspicious_items):
+def evaluate_rules(dom_changes, screenshot_diff_pct, suspicious_items):
     has_malware = False
     has_tamper = False
     has_screenshot_only = False
@@ -331,9 +381,6 @@ def evaluate_rules(dom_changes, screenshot_diff_pct, response_status, suspicious
     for item in suspicious_items:
         if item['severity'] in ('warning', 'critical'):
             has_malware = True
-
-    if response_status and response_status >= 500:
-        return 'unreachable'
 
     if has_malware:
         return 'malware'
@@ -368,22 +415,19 @@ def run_detection(page_id, url, domain):
     try:
         start = time.time()
         p = Page.get_by_id(page_id)
-        render_wait = p['render_wait'] if p else 0
+        render_wait = p['render_wait'] if p else 5
+        ignore_sels = ''
+        if p and 'ignore_selectors' in p.keys():
+            ignore_sels = p['ignore_selectors'] or ''
 
-        if render_wait > 0:
-            html = fetch_rendered(url, wait_seconds=render_wait)
-            if not html:
-                result['status'] = 'error'
-                result['error_message'] = '浏览器渲染失败，获取页面内容为空'
-                return result
-            result['response_status'] = 200
-            result['response_time'] = round(time.time() - start, 2)
-        else:
-            resp = fetch_page(url, config)
-            elapsed = round(time.time() - start, 2)
-            result['response_time'] = elapsed
-            result['response_status'] = resp.status_code
-            html = resp.text
+        html = fetch_rendered(url, wait_seconds=render_wait)
+        if not html:
+            result['status'] = 'error'
+            result['error_message'] = '浏览器渲染失败，获取页面内容为空'
+            return result
+        result['response_status'] = 200
+        result['response_time'] = round(time.time() - start, 2)
+
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         html_dir = os.path.join(SCREENSHOT_DIR, str(page_id))
         os.makedirs(html_dir, exist_ok=True)
@@ -392,12 +436,17 @@ def run_detection(page_id, url, domain):
             f.write(html)
         result['html_path'] = html_path
 
-        current_fp = extract_dom_fingerprint(html)
+        current_fp = extract_dom_fingerprint(html, ignore_sels)
         baseline_fp = json.loads(baseline['dom_fingerprint'])
 
+        if baseline_fp.get('_version', 1) < 3:
+            # 旧版本指纹（v1/v2 全量 MD5）：从基线 HTML 重算 v3 结构指纹
+            if baseline['html_path'] and os.path.exists(baseline['html_path']):
+                with open(baseline['html_path'], 'r', encoding='utf-8') as f:
+                    baseline_fp = extract_dom_fingerprint(f.read(), ignore_sels)
+                    logging.getLogger('detector').info(f'Upgraded baseline fingerprint for page {page_id} to v3')
+
         dom_changes = compare_dom(baseline_fp, current_fp, domain)
-        if render_wait > 0:
-            dom_changes = [c for c in dom_changes if c['category'] not in ('content', 'structure')]
         result['dom_changes'] = dom_changes
 
         suspicious_items = detect_suspicious_dom(current_fp)
@@ -415,7 +464,7 @@ def run_detection(page_id, url, domain):
             })
             result['dom_changes'] = dom_changes
 
-        screenshot_wait = max(render_wait, 2) if render_wait > 0 else 2
+        screenshot_wait = max(render_wait, 2)
         screenshot_path = take_screenshot(url, page_id, ts, wait_seconds=screenshot_wait)
         if screenshot_path:
             result['screenshot_path'] = screenshot_path
@@ -436,26 +485,10 @@ def run_detection(page_id, url, domain):
         status = evaluate_rules(
             dom_changes,
             result['screenshot_diff_percent'],
-            result['response_status'],
             suspicious_items
         )
         result['status'] = status
 
-    except requests.exceptions.Timeout:
-        result['status'] = 'timeout'
-        result['error_message'] = f'请求超时 (>{config["request_timeout"]}s)'
-        result['response_status'] = 0
-    except requests.exceptions.ConnectionError as e:
-        result['status'] = 'connection_error'
-        result['error_message'] = f'连接失败: {str(e)[:200]}'
-        result['response_status'] = 0
-    except requests.exceptions.HTTPError as e:
-        result['status'] = 'http_error'
-        result['error_message'] = f'HTTP 错误: {str(e)[:200]}'
-        try:
-            result['response_status'] = e.response.status_code
-        except:
-            result['response_status'] = 0
     except Exception as e:
         result['status'] = 'error'
         result['error_message'] = f'检测异常: {str(e)[:300]}'
@@ -465,24 +498,15 @@ def run_detection(page_id, url, domain):
 
 
 def create_baseline_for_page(page_id, url, reason=''):
-    config = load_config()
     page = Page.get_by_id(page_id)
-    render_wait = page['render_wait'] if page else 0
+    render_wait = page['render_wait'] if page else 5
+    ignore_sels = ''
+    if page and 'ignore_selectors' in page.keys():
+        ignore_sels = page['ignore_selectors'] or ''
     try:
-        if render_wait > 0:
-            html = fetch_rendered(url, wait_seconds=render_wait)
-            if not html:
-                return None, '浏览器渲染失败，获取页面内容为空'
-        else:
-            ua = random.choice(config['user_agents'])
-            headers = {
-                'User-Agent': ua,
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-            }
-            resp = requests.get(url, headers=headers, timeout=config['request_timeout'],
-                                allow_redirects=True, verify=False)
-            html = resp.text
+        html = fetch_rendered(url, wait_seconds=render_wait)
+        if not html:
+            return None, '浏览器渲染失败，获取页面内容为空'
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         bl_dir = os.path.join(BASELINE_DIR, str(page_id))
@@ -498,7 +522,7 @@ def create_baseline_for_page(page_id, url, reason=''):
             shutil.copy2(screenshot_path, new_path)
             screenshot_path = new_path
 
-        fp = extract_dom_fingerprint(html)
+        fp = extract_dom_fingerprint(html, ignore_sels)
 
         bid = Baseline.create(page_id, screenshot_path, html_path, fp, reason)
         return bid, None

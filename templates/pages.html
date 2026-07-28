@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block title %}{{ site.name }} - 页面管理{% endblock %}
+{% block extra_head %}
+<style>
+    .baseline-spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: baseline-spin 0.6s linear infinite; vertical-align: middle; margin-right: 4px; }
+    @keyframes baseline-spin { to { transform: rotate(360deg); } }
+    .baseline-form button:disabled, .baseline-form button.has-spinner { opacity: 0.7; cursor: wait; pointer-events: none; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-title">
     {{ customer.name }} / {{ site.name }} - 页面管理
@@ -28,13 +35,13 @@
         </div>
         <div class="btn-group">
             {% if not p.has_baseline %}
-            <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" style="display:inline">
+            <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" class="baseline-form" style="display:inline">
                 <input type="hidden" name="reason" value="初始建立基线">
                 <button class="btn btn-sm btn-success">建立基线</button>
             </form>
             {% else %}
             <a href="{{ url_for('baseline_view', pid=p.id) }}" class="btn btn-sm btn-outline">查看基线</a>
-            <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" style="display:inline" onsubmit="return confirm('重新建基线将覆盖旧基线，确定？');">
+            <form method="POST" action="{{ url_for('page_baseline_create', pid=p.id) }}" class="baseline-form" style="display:inline" data-confirm="重新建基线将覆盖旧基线，确定？">
                 <input type="hidden" name="reason" value="手动重建基线">
                 <button class="btn btn-sm btn-warning">重建基线</button>
             </form>
@@ -53,4 +60,31 @@
     <p>该站点下还没有添加页面</p>
 </div>
 {% endif %}
+<script>
+(function() {
+    var baselineSubmitting = false;
+    document.querySelectorAll('.baseline-form').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            if (form.getAttribute('data-confirm')) {
+                if (!confirm(form.getAttribute('data-confirm'))) {
+                    e.preventDefault();
+                    return;
+                }
+            }
+            if (baselineSubmitting) {
+                e.preventDefault();
+                return;
+            }
+            baselineSubmitting = true;
+            var allBtns = document.querySelectorAll('.baseline-form button');
+            for (var i = 0; i < allBtns.length; i++) {
+                var b = allBtns[i];
+                b.disabled = true;
+                b.classList.add('has-spinner');
+                b.innerHTML = '<span class="baseline-spinner"></span>' + b.textContent;
+            }
+        });
+    });
+})();
+</script>
 {% endblock %}

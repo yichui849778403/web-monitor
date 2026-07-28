@@ -1,37 +1,57 @@
 {% extends "base.html" %}
 {% import "_pagination.html" as pg %}
 {% block title %}告警管理{% endblock %}
+{% block extra_head %}
+<style>
+    tr.needs-review td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+    tr.needs-review { background: #fffafb; }
+    tr.needs-review:hover { background: #fdf2f2; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-title">告警管理</div>
-{% if alerts %}
-<table>
-    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>审核</th><th>操作</th></tr>
-    {% for a in alerts %}
-    {% set reviewed = a.reviewed %}
-    <tr style="{{ 'background:#fff8e1;' if not reviewed and a.status in ('malware','tampered') }}">
-        <td>{{ format_dt(a.detected_at) }}</td>
-        <td>{{ a.customer_name }}</td>
-        <td>{{ a.site_name }}</td>
-        <td>{{ a.page_name }}</td>
-        <td><span class="badge badge-{{ status_class(a.status) }}">{{ status_label(a.status) }}</span></td>
-        <td>{{ a.response_status or '-' }}</td>
-        <td>
-            {% if reviewed %}
-            <span class="badge badge-{{ 'success' if a.review_result == 'baseline_updated' else 'info' }}">
-                {{ {'confirmed_threat':'确认威胁','false_positive':'误报','baseline_updated':'已更新基线'}.get(a.review_result, a.review_result) }}
-            </span>
-            {% else %}
-            <span class="badge badge-warning">未审核</span>
-            {% endif %}
-        </td>
-        <td>
-            <a href="{{ url_for('diff_view', rid=a.id) }}" class="btn btn-sm btn-outline">查看差异</a>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-{{ pg.pagination('?', page, total_pages, total, per_page) }}
-{% else %}
-<div class="empty-state"><div class="icon">&#9989;</div><p>暂无告警</p></div>
-{% endif %}
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            告警列表
+            {% if total %}<span class="text-muted" style="font-weight:400;">共 {{ total }} 条</span>{% endif %}
+        </div>
+    </div>
+    <div class="panel-body flush">
+        {% if alerts %}
+        <table>
+            <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>审核</th><th>操作</th></tr>
+            {% for a in alerts %}
+            {% set reviewed = a.reviewed %}
+            <tr class="{{ 'needs-review' if not reviewed and a.status in ('malware','tampered') }}">
+                <td class="text-muted">{{ format_dt(a.detected_at) }}</td>
+                <td>{{ a.customer_name }}</td>
+                <td>{{ a.site_name }}</td>
+                <td>{{ a.page_name }}</td>
+                <td><span class="badge badge-{{ status_class(a.status) }}">{{ status_label(a.status) }}</span></td>
+                <td>{{ a.response_status or '-' }}</td>
+                <td>
+                    {% if reviewed %}
+                    <span class="badge badge-{{ 'success' if a.review_result == 'baseline_updated' else 'info' }}">
+                        {{ {'confirmed_threat':'确认威胁','false_positive':'误报','baseline_updated':'已更新基线'}.get(a.review_result, a.review_result) }}
+                    </span>
+                    {% else %}
+                    <span class="badge badge-warning">未审核</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{{ url_for('diff_view', rid=a.id) }}" class="btn btn-sm btn-outline">查看差异</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {{ pg.pagination('?', page, total_pages, total, per_page) }}
+        {% else %}
+        <div class="empty-state">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <p>暂无告警</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

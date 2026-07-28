@@ -1,45 +1,71 @@
 {% extends "base.html" %}
 {% import "_pagination.html" as pg %}
 {% block title %}检测日志{% endblock %}
+{% block extra_head %}
+<style>
+    .filter-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .filter-bar .form-group { margin: 0; min-width: 160px; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-title">检测日志</div>
-<form method="GET" style="margin-bottom:16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;">
-    <div class="form-group" style="margin:0;">
-        <label>开始日期</label>
-        <input type="date" name="start" value="{{ request.args.get('start', today_str()) }}">
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            筛选条件
+        </div>
     </div>
-    <div class="form-group" style="margin:0;">
-        <label>结束日期</label>
-        <input type="date" name="end" value="{{ request.args.get('end', today_str()) }}">
+    <div class="panel-body">
+        <form method="GET" class="filter-bar">
+            <div class="form-group">
+                <label>开始日期</label>
+                <input type="date" name="start" value="{{ request.args.get('start', today_str()) }}">
+            </div>
+            <div class="form-group">
+                <label>结束日期</label>
+                <input type="date" name="end" value="{{ request.args.get('end', today_str()) }}">
+            </div>
+            <button type="submit" class="btn btn-primary">查询</button>
+        </form>
     </div>
-    <button type="submit" class="btn btn-primary" style="height:36px;">查询</button>
-</form>
+</div>
 
-{% if logs %}
-<table>
-    <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>响应时间</th><th>错误信息</th><th>操作</th></tr>
-    {% for l in logs %}
-    <tr>
-        <td>{{ format_dt(l.created_at) }}</td>
-        <td>{{ l.customer_name }}</td>
-        <td>{{ l.site_name }}</td>
-        <td><a href="{{ l.url }}" target="_blank" style="color:#1a73e8;">{{ l.page_name }}</a></td>
-        <td><span class="badge badge-{{ status_class(l.status) }}">{{ status_label(l.status) }}</span></td>
-        <td>{{ l.response_status or '-' }}</td>
-        <td>{{ (l.response_time|string) + 's' if l.response_time else '-' }}</td>
-        <td class="text-muted" style="max-width:250px;">{{ l.error_message or '-' }}</td>
-        <td>
-            {% if l.status != 'normal' and l.result_id %}
-            <a href="{{ url_for('diff_view', rid=l.result_id) }}" class="btn btn-sm btn-outline">查看差异</a>
-            {% else %}
-            -
-            {% endif %}
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-{{ pg.pagination('?start=' + request.args.get('start', today_str()) + '&end=' + request.args.get('end', today_str()) + '&', page, total_pages, total, per_page) }}
-{% else %}
-<div class="empty-state"><p>无检测记录</p></div>
-{% endif %}
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+            检测记录
+            {% if total %}<span class="text-muted" style="font-weight:400;">共 {{ total }} 条</span>{% endif %}
+        </div>
+    </div>
+    <div class="panel-body flush">
+        {% if logs %}
+        <table>
+            <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>响应时间</th><th>错误信息</th><th>操作</th></tr>
+            {% for l in logs %}
+            <tr>
+                <td class="text-muted">{{ format_dt(l.created_at) }}</td>
+                <td>{{ l.customer_name }}</td>
+                <td>{{ l.site_name }}</td>
+                <td><a href="{{ l.url }}" target="_blank">{{ l.page_name }}</a></td>
+                <td><span class="badge badge-{{ status_class(l.status) }}">{{ status_label(l.status) }}</span></td>
+                <td>{{ l.response_status or '-' }}</td>
+                <td class="text-muted">{{ (l.response_time|string) + 's' if l.response_time else '-' }}</td>
+                <td class="text-muted" style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ l.error_message }}">{{ l.error_message or '-' }}</td>
+                <td>
+                    {% if l.status != 'normal' and l.result_id %}
+                    <a href="{{ url_for('diff_view', rid=l.result_id) }}" class="btn btn-sm btn-outline">查看差异</a>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {{ pg.pagination('?start=' + request.args.get('start', today_str()) + '&end=' + request.args.get('end', today_str()) + '&', page, total_pages, total, per_page) }}
+        {% else %}
+        <div class="empty-state"><p>该时间段无检测记录</p></div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

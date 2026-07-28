@@ -1,6 +1,5 @@
 import os
 import json
-import difflib
 import logging
 from datetime import datetime, timedelta
 
@@ -42,14 +41,10 @@ app.jinja_env.globals['today_str'] = _today_str
 def inject_globals():
     return {
         'alert_count': DetectionResult.count_alerts(),
-        'waf_blocked_count': _waf_blocked_count(),
         'scheduler_status': scheduler.get_status(),
     }
 
 
-def _waf_blocked_count():
-    sites = Site.get_waf_blocked_sites()
-    return len(sites)
 
 
 def _status_label(status):
@@ -134,13 +129,10 @@ def _is_modal():
 def customers():
     cid = request.args.get('cid', type=int)
     clist = Customer.list_all()
-    waf_sites = Site.get_waf_blocked_sites()
-    waf_ids = {s['id'] for s in waf_sites}
 
     for c in clist:
         sites = Site.list_by_customer(c['id'])
         for s in sites:
-            s['waf_blocked'] = s['id'] in waf_ids
             s['pages'] = Page.list_by_site(s['id'])
         c['sites'] = sites
 
@@ -206,9 +198,8 @@ def site_add(cid):
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         domain = request.form.get('domain', '').strip()
-        priority = int(request.form.get('priority', 5))
         if name and domain:
-            Site.create(cid, name, domain, priority)
+            Site.create(cid, name, domain)
             return redirect(url_for('customers', cid=cid))
     return render_template('site_form.html', customer=cust, site=None, modal=_is_modal())
 
@@ -223,9 +214,8 @@ def site_edit(sid):
         name = request.form.get('name', '').strip()
         domain = request.form.get('domain', '').strip()
         enabled = int(request.form.get('enabled', '1'))
-        priority = int(request.form.get('priority', 5))
         if name and domain:
-            Site.update(sid, name, domain, enabled, priority)
+            Site.update(sid, name, domain, enabled)
             return redirect(url_for('customers', cid=s['customer_id']))
     return render_template('site_form.html', customer=cust, site=s, modal=_is_modal())
 
@@ -238,15 +228,6 @@ def site_delete(sid):
     cid = s['customer_id']
     Site.delete(sid)
     return redirect(url_for('customers', cid=cid))
-
-
-@app.route('/sites/<int:sid>/waf-unblock', methods=['POST'])
-def site_waf_unblock(sid):
-    s = Site.get_by_id(sid)
-    if s:
-        Site.mark_waf_unblocked(sid)
-        return redirect(url_for('customers', cid=s['customer_id']))
-    return redirect(url_for('dashboard'))
 
 
 # ---------------------------------------------------------------------------
@@ -269,9 +250,10 @@ def page_add(sid):
     if request.method == 'POST':
         name = request.form.get('name', '').strip()
         url = request.form.get('url', '').strip()
-        render_wait = int(request.form.get('render_wait', 0))
+        render_wait = int(request.form.get('render_wait', 5))
+        ignore_selectors = request.form.get('ignore_selectors', '').strip()
         if name and url:
-            Page.create(sid, name, url, render_wait)
+            Page.create(sid, name, url, render_wait, ignore_selectors)
             return redirect(url_for('customers', cid=s['customer_id']))
     return render_template('page_form.html', site=s, customer=cust, page=None, modal=_is_modal())
 
@@ -285,9 +267,10 @@ def page_edit(pid):
         name = request.form.get('name', '').strip()
         url = request.form.get('url', '').strip()
         enabled = int(request.form.get('enabled', '1'))
-        render_wait = int(request.form.get('render_wait', 0))
+        render_wait = int(request.form.get('render_wait', 5))
+        ignore_selectors = request.form.get('ignore_selectors', '').strip()
         if name and url:
-            Page.update(pid, name, url, enabled, render_wait)
+            Page.update(pid, name, url, enabled, render_wait, ignore_selectors)
             return redirect(url_for('customers', cid=p['customer_id']))
     return render_template('page_form.html', site={'id': p['site_id'], 'name': p['site_name']},
                            customer={'id': p['customer_id'], 'name': p['customer_name']}, page=p, modal=_is_modal())
@@ -381,6 +364,23 @@ def diff_view(rid):
         return redirect(url_for('alerts'))
 
     baseline = Baseline.get_latest(r['page_id'])
+    dom_changes = json.loads(r['dom_changes']) if r['dom_changes'] else []
+
+    return render_template('diff_view.html', result=r, dom_changes=dom_changes,
+                           baseline=baseline)
+
+
+@app.route('/diff/<int:rid>/source')
+def diff_source(rid):
+    """源码对比片段：懒加载，避免阻塞 diff 主页面的打开。"""
+    from diff_util import render_source_diff_cached
+
+    r = DetectionResult.get_by_id(rid)
+    if not r:
+        return '<p class="text-muted" style="padding:16px;">记录不存在</p>', 404
+
+    baseline = Baseline.get_latest(r['page_id'])
+
     baseline_html = ''
     if baseline and baseline['html_path'] and os.path.exists(baseline['html_path']):
         with open(baseline['html_path'], 'r', encoding='utf-8') as f:
@@ -391,25 +391,21 @@ def diff_view(rid):
         with open(r['html_path'], 'r', encoding='utf-8') as f:
             current_html = f.read()
 
-    dom_changes = json.loads(r['dom_changes']) if r['dom_changes'] else []
+    if not baseline_html and not current_html:
+        return '<p class="text-muted" style="padding:16px;">无可比对的源代码数据</p>'
 
-    source_diff = None
-    if baseline_html or current_html:
-        bl_lines = baseline_html.splitlines(keepends=True)
-        cr_lines = current_html.splitlines(keepends=True)
-        diff = difflib.HtmlDiff(tabsize=2, wrapcolumn=120)
-        from_time = _format_dt(baseline['created_at']) if baseline else ''
-        to_time = _format_dt(r['detected_at'])
-        source_diff = diff.make_table(
-            bl_lines, cr_lines,
-            fromdesc=f'基线 HTML  ({from_time})' if from_time else '基线 HTML',
-            todesc=f'当前 HTML  ({to_time})',
-            context=False
-        )
+    def _mtime(p):
+        try:
+            return os.path.getmtime(p)
+        except OSError:
+            return 0
 
-    return render_template('diff_view.html', result=r, baseline_html=baseline_html,
-                           current_html=current_html, dom_changes=dom_changes,
-                           baseline=baseline, source_diff=source_diff)
+    cache_key = (
+        rid,
+        _mtime(baseline['html_path']) if baseline and baseline['html_path'] else 0,
+        _mtime(r['html_path']) if r['html_path'] else 0,
+    )
+    return render_source_diff_cached(cache_key, baseline_html, current_html)
 
 
 # ---------------------------------------------------------------------------
@@ -522,7 +518,6 @@ def settings():
     if request.method == 'POST':
         config['global_request_interval'] = int(request.form.get('global_request_interval', 8))
         config['same_domain_interval'] = int(request.form.get('same_domain_interval', 20))
-        config['request_timeout'] = int(request.form.get('request_timeout', 15))
         config['retry_count'] = int(request.form.get('retry_count', 3))
         config['retry_interval_minutes'] = int(request.form.get('retry_interval_minutes', 2))
         config['screenshot_diff_threshold'] = float(request.form.get('screenshot_diff_threshold', 5.0))

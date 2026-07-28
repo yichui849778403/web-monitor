@@ -1,53 +1,99 @@
 {% extends "base.html" %}
 {% block title %}报告管理{% endblock %}
+{% block extra_head %}
+<style>
+    .gen-forms { display: flex; gap: 24px; flex-wrap: wrap; }
+    .gen-form-box {
+        flex: 1; min-width: 300px; border: 1px solid var(--border); border-radius: 8px;
+        padding: 16px; background: #fafbfd;
+    }
+    .gen-form-box .box-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+    .gen-form-box .box-title svg { width: 15px; height: 15px; color: var(--text-3); }
+    .gen-form-box form { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; }
+    .gen-form-box .form-group { margin: 0; flex: 1; min-width: 130px; }
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-title">报告管理</div>
-
-<h3 style="margin-bottom: 10px;">手动生成报告</h3>
-<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:24px;">
-    <form method="POST" action="{{ url_for('report_generate') }}" style="display:flex;gap:8px;align-items:end;">
-        <div class="form-group" style="margin:0;">
-            <label>全量日报</label>
-            <input type="date" name="date" value="{{ today_str() }}">
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="12 5 12 19"/><polyline points="5 12 19 12"/></svg>
+            手动生成报告
         </div>
-        <input type="hidden" name="customer_id" value="">
-        <button type="submit" class="btn btn-primary" style="height:36px;">生成全量日报</button>
-    </form>
-    {% if customers %}
-    <form method="POST" action="{{ url_for('report_generate') }}" style="display:flex;gap:8px;align-items:end;">
-        <div class="form-group" style="margin:0;">
-            <label>客户报告</label>
-            <select name="customer_id">
-                {% for c in customers %}
-                <option value="{{ c.id }}">{{ c.name }}</option>
-                {% endfor %}
-            </select>
+    </div>
+    <div class="panel-body">
+        <div class="gen-forms">
+            <div class="gen-form-box">
+                <div class="box-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    全量日报（所有客户）
+                </div>
+                <form method="POST" action="{{ url_for('report_generate') }}">
+                    <div class="form-group">
+                        <label>日期</label>
+                        <input type="date" name="date" value="{{ today_str() }}">
+                    </div>
+                    <input type="hidden" name="customer_id" value="">
+                    <button type="submit" class="btn btn-primary">生成</button>
+                </form>
+            </div>
+            {% if customers %}
+            <div class="gen-form-box">
+                <div class="box-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    单客户报告
+                </div>
+                <form method="POST" action="{{ url_for('report_generate') }}">
+                    <div class="form-group">
+                        <label>客户</label>
+                        <select name="customer_id">
+                            {% for c in customers %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>日期</label>
+                        <input type="date" name="date" value="{{ today_str() }}">
+                    </div>
+                    <button type="submit" class="btn btn-success">生成</button>
+                </form>
+            </div>
+            {% endif %}
         </div>
-        <input type="date" name="date" value="{{ today_str() }}" style="margin-left:4px;">
-        <button type="submit" class="btn btn-success" style="height:36px;">生成客户报告</button>
-    </form>
-    {% endif %}
+    </div>
 </div>
 
-<h3 style="margin-bottom: 10px;">已生成报告</h3>
-{% if files %}
-<table>
-    <tr><th>文件名</th><th>大小</th><th>生成时间</th><th>操作</th></tr>
-    {% for f in files %}
-    <tr>
-        <td>{{ f.filename }}</td>
-        <td>{{ (f.size / 1024) | round(1) }} KB</td>
-        <td>{{ f.mtime }}</td>
-        <td>
-            <a href="{{ url_for('report_view', filename=f.filename) }}" target="_blank" class="btn btn-sm btn-outline">查看</a>
-            <form method="POST" action="{{ url_for('report_delete', filename=f.filename) }}" style="display:inline">
-                <button class="btn btn-sm btn-danger">删除</button>
-            </form>
-        </td>
-    </tr>
-    {% endfor %}
-</table>
-{% else %}
-<div class="empty-state"><p>暂无报告，请先生成</p></div>
-{% endif %}
+<div class="panel">
+    <div class="panel-header">
+        <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            已生成报告
+            {% if files %}<span class="text-muted" style="font-weight:400;">{{ files|length }} 个文件</span>{% endif %}
+        </div>
+    </div>
+    <div class="panel-body flush">
+        {% if files %}
+        <table>
+            <tr><th>文件名</th><th style="width:100px;">大小</th><th style="width:180px;">生成时间</th><th style="width:150px;">操作</th></tr>
+            {% for f in files %}
+            <tr>
+                <td class="mono" style="font-size:12.5px;">{{ f.filename }}</td>
+                <td class="text-muted">{{ (f.size / 1024) | round(1) }} KB</td>
+                <td class="text-muted">{{ f.mtime }}</td>
+                <td>
+                    <a href="{{ url_for('report_view', filename=f.filename) }}" target="_blank" class="btn btn-sm btn-outline">查看</a>
+                    <form method="POST" action="{{ url_for('report_delete', filename=f.filename) }}" style="display:inline" onsubmit="return confirm('删除该报告文件？');">
+                        <button class="btn btn-sm btn-danger">删除</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+            <p>暂无报告，请先生成</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}
