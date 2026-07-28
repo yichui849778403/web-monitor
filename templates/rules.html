@@ -87,6 +87,7 @@
             <li><strong>篡改（tamper）</strong>仅在没有挂马和不可访问时才判定</li>
             <li>关键词检测同时对比<strong>内置关键词</strong>（系统内置，不可删除）和<strong>自定义关键词</strong>（在设置页可自行添加 / 删除）</li>
             <li>DOM 对比和截图对比<strong>并行执行</strong>，结果合并判定，互不影响</li>
+            <li>对比前自动<strong>归一化动态值</strong>（时间戳、日期文本、style 属性数值、资源文件名构建 hash、URL 随机参数 → 占位符），天然抖动不引起误报</li>
             <li>每个页面可配置<strong>忽略区域</strong>（CSS 选择器），对比前剔除地图、轮播、计数器等天然动态区块，在"客户与站点 → 编辑页面"中设置</li>
         </ul>
     </div>
