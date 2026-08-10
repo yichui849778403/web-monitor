@@ -163,8 +163,13 @@ def extract_dom_fingerprint(html, ignore_selectors=''):
     }
 
 
-def detect_suspicious_dom(fp):
+def detect_suspicious_dom(fp, baseline_fp=None):
     issues = []
+    baseline_script_srcs = {s['src'] for s in baseline_fp.get('scripts', [])} if baseline_fp else set()
+    baseline_iframes = {
+        (f['src'], f.get('width', ''), f.get('height', '')) for f in baseline_fp.get('iframes', [])
+    } if baseline_fp else set()
+
     for s in fp.get('scripts', []):
         if s['type'] == 'external':
             src = s['src']
@@ -175,16 +180,19 @@ def detect_suspicious_dom(fp):
                     'detail': f'外部脚本: {src}',
                 })
             if 'eval' in src.lower() or 'base64' in src.lower():
-                issues.append({
-                    'type': 'suspicious_script_src',
-                    'severity': 'warning',
-                    'detail': f'可疑脚本路径: {src}',
-                })
+                if src not in baseline_script_srcs:
+                    issues.append({
+                        'type': 'suspicious_script_src',
+                        'severity': 'warning',
+                        'detail': f'可疑脚本路径: {src}',
+                    })
         elif s['type'] == 'inline':
             pass
 
     for f in fp.get('iframes', []):
         src = f['src']
+        if (src, f.get('width', ''), f.get('height', '')) in baseline_iframes:
+            continue
         if src and (src.startswith('http') or src.startswith('//')):
             issues.append({
                 'type': 'external_iframe',
@@ -449,7 +457,7 @@ def run_detection(page_id, url, domain):
         dom_changes = compare_dom(baseline_fp, current_fp, domain)
         result['dom_changes'] = dom_changes
 
-        suspicious_items = detect_suspicious_dom(current_fp)
+        suspicious_items = detect_suspicious_dom(current_fp, baseline_fp)
 
         found_keywords = scan_keywords(html)
         if found_keywords:
