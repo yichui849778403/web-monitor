@@ -660,6 +660,12 @@ def _render_report_html(data, date, title_extra=None):
         </div>
         {baseline_html}
     </div>
+
+    <div class="report-footer">
+        网页篡改与可用性监测系统 · 本报告由系统自动生成<br>
+        报告内容含人工审核结论，仅供内部安全工作参考
+    </div>
+
 </div>
 </body>
 </html>'''
