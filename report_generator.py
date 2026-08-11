@@ -456,7 +456,7 @@ def _render_report_html(data, date, title_extra=None):
     .banner-logo svg {{ width: 28px; height: 28px; stroke: #fff; }}
     .banner-title {{ font-size: 22px; font-weight: 700; letter-spacing: .5px; }}
     .banner-sub {{ font-size: 12.5px; color: #a8b4d4; margin-top: 4px; }}
-    .banner-meta {{ margin-left: auto; text-align: right; font-size: 12px; color: #a8b4d4; line-height: 1.9; flex-shrink: 0; }}
+    .banner-meta {{ margin-left: auto; text-align: right; font-size: 13px; color: #c4cee4; line-height: 2.2; flex-shrink: 0; }}
     .banner-meta strong {{ color: #fff; font-weight: 600; }}
 
     /* ===== 统计卡 ===== */
