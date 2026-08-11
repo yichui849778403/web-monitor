@@ -58,11 +58,12 @@ def build_queue():
 
 def scheduler_loop():
     global _scheduler_running, _paused, _current_task, _task_history
-    config = load_config()
 
     time.sleep(3)
 
     while _scheduler_running:
+        # 每次循环重新读取配置，设置页修改后无需重启即可生效
+        config = load_config()
         if _paused:
             time.sleep(2)
             continue
