@@ -335,11 +335,13 @@ def baseline_history():
 def alerts():
     p = request.args.get('p', 1, type=int)
     per_page = request.args.get('per_page', 30, type=int)
+    show_all = request.args.get('show', '') == 'all'
     offset = (p - 1) * per_page
-    alist = DetectionResult.get_alerts(limit=per_page, offset=offset)
-    total = DetectionResult.count_alerts_all()
+    alist = DetectionResult.get_alerts(limit=per_page, offset=offset, include_resolved=show_all)
+    total = DetectionResult.count_alerts_all(include_resolved=show_all)
     total_pages = max(1, (total + per_page - 1) // per_page)
-    return render_template('alerts.html', alerts=alist, page=p, total_pages=total_pages, total=total, per_page=per_page)
+    return render_template('alerts.html', alerts=alist, page=p, total_pages=total_pages,
+                           total=total, per_page=per_page, show_all=show_all)
 
 
 @app.route('/alerts/<int:rid>/review', methods=['POST'])
@@ -348,11 +350,16 @@ def alert_review(rid):
     comment = request.form.get('comment', '')
     DetectionResult.review(rid, result, comment)
 
-    if result == 'baseline_updated':
-        r = DetectionResult.get_by_id(rid)
-        if r:
-            reason = '人工审核确认安全，更新基线'
-            create_baseline_for_page(r['page_id'], r['url'], reason)
+    r = DetectionResult.get_by_id(rid)
+    if r:
+        if result == 'false_positive':
+            # 误报吸收：该变化纳入基线，后续不再触发同类告警
+            create_baseline_for_page(r['page_id'], r['url'], '人工审核误报，吸收变化并更新基线')
+            DetectionResult.resolve(rid, '误报吸收')
+        elif result == 'baseline_updated':
+            create_baseline_for_page(r['page_id'], r['url'], '人工审核确认安全，更新基线')
+            DetectionResult.resolve(rid, '基线已更新')
+        # confirmed_threat：保持进行中，后续同指纹检测自动累计，不重复告警
 
     return redirect(url_for('alerts'))
 

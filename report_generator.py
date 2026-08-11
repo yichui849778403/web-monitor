@@ -282,6 +282,15 @@ def _render_dom_changes(changes):
 
 def _render_review_block(alert):
     if not alert.get('reviewed'):
+        if alert.get('resolved'):
+            reason = alert.get('resolved_reason') or ''
+            return f'''
+                <div class="review-block">
+                    <div class="review-head">
+                        <span class="badge badge-muted">已自动解决</span>
+                        <span class="review-tip" style="color:#64748b;">该告警已自动解决（{_esc(reason)}），无需人工审核。</span>
+                    </div>
+                </div>'''
         return '''
                 <div class="review-block pending">
                     <div class="review-head">
@@ -322,6 +331,9 @@ def _render_alert_card(cust_data, site_data, page_data, alert, idx):
         ('响应时间', f"{alert['response_time']:.1f} s" if alert.get('response_time') is not None else '-'),
         ('截图差异度', f"{alert['screenshot_diff_percent']:.2f}%" if alert.get('screenshot_diff_percent') is not None else '-'),
     ]
+    ongoing = alert.get('ongoing_count') or 1
+    if ongoing > 1:
+        info_items.append(('持续触发', f'{ongoing} 次（最近 {_esc((alert.get("last_seen_at") or "")[:19])}）'))
     info_html = ''.join(
         f'<div class="info-item"><div class="info-label">{k}</div><div class="info-value">{v}</div></div>'
         for k, v in info_items
@@ -401,7 +413,7 @@ def _render_report_html(data, date, title_extra=None):
     )
     pending_reviews = sum(
         1 for _c, _s, page_data in _iter_pages(data)
-        for a in page_data['alerts'] if not a.get('reviewed')
+        for a in page_data['alerts'] if not a.get('reviewed') and not a.get('resolved')
     )
 
     gen_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

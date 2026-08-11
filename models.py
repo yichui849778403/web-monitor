@@ -80,7 +80,13 @@ def init_db():
             reviewed INTEGER DEFAULT 0,
             review_result TEXT,
             review_comment TEXT,
-            reviewed_at TIMESTAMP
+            reviewed_at TIMESTAMP,
+            resolved INTEGER DEFAULT 0,
+            resolved_at TIMESTAMP,
+            resolved_reason TEXT,
+            ongoing_count INTEGER DEFAULT 1,
+            last_seen_at TIMESTAMP,
+            alert_fingerprint TEXT
         );
 
         CREATE TABLE IF NOT EXISTS detection_logs (
@@ -137,6 +143,25 @@ def init_db():
         pass
     try:
         c.execute("ALTER TABLE sites DROP COLUMN waf_blocked_at")
+    except sqlite3.OperationalError:
+        pass
+    # 告警生命周期字段迁移
+    for ddl in (
+        'ALTER TABLE detection_results ADD COLUMN resolved_at TIMESTAMP',
+        'ALTER TABLE detection_results ADD COLUMN resolved_reason TEXT',
+        'ALTER TABLE detection_results ADD COLUMN ongoing_count INTEGER DEFAULT 1',
+        'ALTER TABLE detection_results ADD COLUMN last_seen_at TIMESTAMP',
+        'ALTER TABLE detection_results ADD COLUMN alert_fingerprint TEXT',
+    ):
+        try:
+            c.execute(ddl)
+        except sqlite3.OperationalError:
+            pass
+    try:
+        # resolved 列首次添加时才执行历史迁移（后续启动不重复执行）
+        c.execute('ALTER TABLE detection_results ADD COLUMN resolved INTEGER DEFAULT 0')
+        c.execute('UPDATE detection_results SET resolved=1, resolved_at=reviewed_at WHERE reviewed=1')
+        c.execute('UPDATE detection_results SET last_seen_at=detected_at WHERE last_seen_at IS NULL')
     except sqlite3.OperationalError:
         pass
     conn.commit()
@@ -411,23 +436,75 @@ class DetectionResult:
     def create(pid, baseline_id, status, dom_changes=None, screenshot_diff_pct=None,
                screenshot_path=None, html_path=None, diff_image_path=None,
                response_status=None, response_time=None, error_message=None,
-               retry_count=0, is_retry=0):
+               retry_count=0, is_retry=0, alert_fingerprint=None):
         db = get_db()
         db.execute(
             'INSERT INTO detection_results '
             '(page_id, baseline_id, status, dom_changes, screenshot_diff_percent, '
             'screenshot_path, html_path, diff_image_path, response_status, '
-            'response_time, error_message, retry_count, is_retry) '
-            'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'response_time, error_message, retry_count, is_retry, alert_fingerprint, last_seen_at) '
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now','localtime'))",
             (pid, baseline_id, status,
              json.dumps(dom_changes, ensure_ascii=False) if dom_changes else None,
              screenshot_diff_pct, screenshot_path, html_path, diff_image_path,
-             response_status, response_time, error_message, retry_count, is_retry)
+             response_status, response_time, error_message, retry_count, is_retry,
+             alert_fingerprint)
         )
         db.commit()
         rid = db.execute('SELECT last_insert_rowid()').fetchone()[0]
         db.close()
         return rid
+
+    @staticmethod
+    def get_open_alert(page_id, status):
+        """查询该页面该状态下进行中的告警（resolved=0），不管是否已审核。"""
+        db = get_db()
+        row = db.execute(
+            'SELECT * FROM detection_results '
+            'WHERE page_id=? AND status=? AND is_retry=0 AND resolved=0 '
+            'ORDER BY detected_at DESC LIMIT 1',
+            (page_id, status)
+        ).fetchone()
+        db.close()
+        return dict(row) if row else None
+
+    @staticmethod
+    def bump_ongoing(rid):
+        """同一告警事件再次触发：累计持续次数、更新最近触发时间。"""
+        db = get_db()
+        db.execute(
+            "UPDATE detection_results SET ongoing_count=ongoing_count+1, "
+            "last_seen_at=datetime('now','localtime') WHERE id=?",
+            (rid,)
+        )
+        db.commit()
+        db.close()
+
+    @staticmethod
+    def resolve(rid, reason=''):
+        """解决告警（页面恢复/误报吸收/基线更新/特征变更等）。"""
+        db = get_db()
+        db.execute(
+            "UPDATE detection_results SET resolved=1, resolved_at=datetime('now','localtime'), "
+            "resolved_reason=? WHERE id=?",
+            (reason, rid)
+        )
+        db.commit()
+        db.close()
+
+    @staticmethod
+    def resolve_open_for_page(page_id, reason=''):
+        """页面恢复正常时，解决其所有进行中告警。返回解决条数。"""
+        db = get_db()
+        cur = db.execute(
+            "UPDATE detection_results SET resolved=1, resolved_at=datetime('now','localtime'), "
+            "resolved_reason=? WHERE page_id=? AND resolved=0 AND status NOT IN ('normal','info')",
+            (reason, page_id)
+        )
+        db.commit()
+        n = cur.rowcount
+        db.close()
+        return n
 
     @staticmethod
     def log_detection(pid, rid, status, response_status=None, response_time=None, error_message=None):
@@ -441,27 +518,29 @@ class DetectionResult:
         db.close()
 
     @staticmethod
-    def get_alerts(limit=100, offset=0):
+    def get_alerts(limit=100, offset=0, include_resolved=False):
         db = get_db()
+        resolved_filter = '' if include_resolved else 'AND dr.resolved=0'
         rows = db.execute(
             'SELECT dr.*, p.url, p.name as page_name, s.name as site_name, c.name as customer_name '
             'FROM detection_results dr '
             'JOIN pages p ON dr.page_id=p.id '
             'JOIN sites s ON p.site_id=s.id '
             'JOIN customers c ON s.customer_id=c.id '
-            'WHERE dr.status NOT IN (\'normal\', \'info\') AND dr.is_retry=0 '
-            'ORDER BY dr.detected_at DESC LIMIT ? OFFSET ?',
+            f"WHERE dr.status NOT IN ('normal', 'info') AND dr.is_retry=0 {resolved_filter} "
+            'ORDER BY dr.resolved ASC, dr.last_seen_at DESC, dr.detected_at DESC LIMIT ? OFFSET ?',
             (limit, offset)
         ).fetchall()
         db.close()
         return [dict(r) for r in rows]
 
     @staticmethod
-    def count_alerts_all():
+    def count_alerts_all(include_resolved=False):
         db = get_db()
+        resolved_filter = '' if include_resolved else 'AND resolved=0'
         row = db.execute(
             'SELECT COUNT(*) as cnt FROM detection_results '
-            'WHERE status NOT IN (\'normal\', \'info\') AND is_retry=0'
+            f"WHERE status NOT IN ('normal', 'info') AND is_retry=0 {resolved_filter}"
         ).fetchone()
         db.close()
         return row['cnt'] if row else 0
@@ -517,7 +596,7 @@ class DetectionResult:
         db = get_db()
         row = db.execute(
             'SELECT COUNT(*) as cnt FROM detection_results '
-            'WHERE status NOT IN (\'normal\', \'info\') AND is_retry=0 AND reviewed=0'
+            "WHERE status NOT IN ('normal', 'info') AND is_retry=0 AND reviewed=0 AND resolved=0"
         ).fetchone()
         db.close()
         return row['cnt']

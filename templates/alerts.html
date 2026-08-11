@@ -16,11 +16,18 @@
             告警列表
             {% if total %}<span class="text-muted" style="font-weight:400;">共 {{ total }} 条</span>{% endif %}
         </div>
+        <div class="panel-actions">
+            {% if show_all %}
+            <a href="{{ url_for('alerts') }}" class="btn btn-sm btn-outline">只看进行中</a>
+            {% else %}
+            <a href="{{ url_for('alerts', show='all') }}" class="btn btn-sm btn-outline">包含历史已解决</a>
+            {% endif %}
+        </div>
     </div>
     <div class="panel-body flush">
         {% if alerts %}
         <table>
-            <tr><th>时间</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>审核</th><th>操作</th></tr>
+            <tr><th>首次触发</th><th>客户</th><th>站点</th><th>页面</th><th>状态</th><th>响应码</th><th>持续</th><th>审核</th><th>操作</th></tr>
             {% for a in alerts %}
             {% set reviewed = a.reviewed %}
             <tr class="{{ 'needs-review' if not reviewed and a.status in ('malware','tampered') }}">
@@ -30,10 +37,17 @@
                 <td>{{ a.page_name }}</td>
                 <td><span class="badge badge-{{ status_class(a.status) }}">{{ status_label(a.status) }}</span></td>
                 <td>{{ a.response_status or '-' }}</td>
+                <td class="text-muted">
+                    {% if (a.ongoing_count or 1) > 1 %}
+                    已触发 {{ a.ongoing_count }} 次<br>最近 {{ format_dt(a.last_seen_at) }}
+                    {% else %}-{% endif %}
+                </td>
                 <td>
-                    {% if reviewed %}
+                    {% if a.resolved %}
+                    <span class="badge badge-muted">已解决{% if a.resolved_reason %}（{{ a.resolved_reason }}）{% endif %}</span>
+                    {% elif reviewed %}
                     <span class="badge badge-{{ 'success' if a.review_result == 'baseline_updated' else 'info' }}">
-                        {{ {'confirmed_threat':'确认威胁','false_positive':'误报','baseline_updated':'已更新基线'}.get(a.review_result, a.review_result) }}
+                        {{ {'confirmed_threat':'确认威胁·持续中','false_positive':'误报','baseline_updated':'已更新基线'}.get(a.review_result, a.review_result) }}
                     </span>
                     {% else %}
                     <span class="badge badge-warning">未审核</span>
@@ -49,7 +63,7 @@
         {% else %}
         <div class="empty-state">
             <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-            <p>暂无告警</p>
+            <p>{% if show_all %}暂无告警{% else %}暂无进行中的告警{% endif %}</p>
         </div>
         {% endif %}
     </div>

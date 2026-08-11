@@ -369,6 +369,30 @@ def compare_screenshots(baseline_path, current_path, diff_output_path, threshold
         return -1, None
 
 
+def compute_alert_fingerprint(dom_changes):
+    """告警指纹：结构性变化的稳定特征哈希，用于判定"同一告警事件"。
+
+    只纳入 script/iframe/title/structure/keyword 等结构性变化；
+    排除 content（文本内容）变化——动态内容每次检测都不同，参与会
+    导致指纹漂移、重复新建告警。脚本/iframe 的 src 在指纹提取时已归一化。
+    """
+    if not dom_changes:
+        return None
+    parts = []
+    for c in dom_changes:
+        cat = c.get('category', '')
+        if cat not in ('script', 'iframe', 'title', 'structure', 'keyword'):
+            continue
+        parts.append('|'.join([
+            cat,
+            c.get('type', ''),
+            c.get('severity', ''),
+            str(c.get('value', '')),
+        ]))
+    parts.sort()
+    return hashlib.md5(';'.join(parts).encode()).hexdigest() if parts else None
+
+
 def evaluate_rules(dom_changes, screenshot_diff_pct, suspicious_items):
     has_malware = False
     has_tamper = False

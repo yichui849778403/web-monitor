@@ -6,7 +6,7 @@ from collections import deque
 
 from config import load_config
 from models import get_db, Page, Site, DetectionResult, Baseline
-from detector import run_detection
+from detector import run_detection, compute_alert_fingerprint
 
 logger = logging.getLogger('scheduler')
 
@@ -101,13 +101,24 @@ def scheduler_loop():
                 baseline_id = baseline['id'] if baseline else None
 
                 if result['status'] in ('tampered', 'malware', 'unreachable'):
-                    if DetectionResult.has_unreviewed_alert(pid, result['status']):
-                        logger.info(f'Skip duplicate alert for {url} [{result["status"]}]')
-                        DetectionResult.log_detection(pid, None, result['status'],
+                    fp = compute_alert_fingerprint(result.get('dom_changes'))
+                    open_alert = DetectionResult.get_open_alert(pid, result['status'])
+                    if open_alert and open_alert.get('alert_fingerprint') == fp:
+                        # 同一告警事件持续中：累计次数、更新最近触发时间，不新建
+                        DetectionResult.bump_ongoing(open_alert['id'])
+                        DetectionResult.log_detection(pid, open_alert['id'], result['status'],
                                                       result['response_status'],
                                                       result['response_time'],
                                                       result['error_message'])
+                        logger.info(
+                            f'Alert ongoing #{open_alert["id"]} for {url} '
+                            f'[{result["status"]}] x{(open_alert.get("ongoing_count") or 1) + 1}'
+                        )
                     else:
+                        # 异常特征变更：关闭旧告警（若有），新建告警事件
+                        if open_alert:
+                            DetectionResult.resolve(open_alert['id'], '异常特征变更')
+                            logger.info(f'Resolved old alert #{open_alert["id"]} for {url} (fingerprint changed)')
                         rid = DetectionResult.create(
                             pid, baseline_id, result['status'],
                             dom_changes=result['dom_changes'],
@@ -118,6 +129,7 @@ def scheduler_loop():
                             response_status=result['response_status'],
                             response_time=result['response_time'],
                             error_message=result['error_message'],
+                            alert_fingerprint=fp,
                         )
                         DetectionResult.log_detection(pid, rid, result['status'],
                                                       result['response_status'],
@@ -146,6 +158,10 @@ def scheduler_loop():
                                                   msg)
                 else:
                     msg = result.get('error_message', '')
+                    if result['status'] == 'normal':
+                        n = DetectionResult.resolve_open_for_page(pid, '页面恢复正常')
+                        if n:
+                            logger.info(f'Auto-resolved {n} open alert(s) for {url}')
                     rid = DetectionResult.create(
                         pid, baseline_id, result['status'],
                         dom_changes=result['dom_changes'],

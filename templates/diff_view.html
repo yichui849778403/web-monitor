@@ -203,7 +203,9 @@
 
 {% if result.reviewed %}
 <div class="alert-box alert-info" style="margin-bottom:0;">
-    该告警已审核：{{ {'confirmed_threat':'确认为威胁','false_positive':'确认为误报','baseline_updated':'已更新基线'}.get(result.review_result, result.review_result) }}
+    该告警已审核：{{ {'confirmed_threat':'确认为威胁（持续告警中，页面恢复后自动解决）','false_positive':'确认为误报（已吸收并更新基线）','baseline_updated':'已更新基线（告警已解决）'}.get(result.review_result, result.review_result) }}
+    {% if (result.ongoing_count or 1) > 1 %}<span class="text-muted">· 已持续触发 {{ result.ongoing_count }} 次</span>{% endif %}
+    {% if result.resolved %}<span class="text-muted">· 已解决{% if result.resolved_reason %}（{{ result.resolved_reason }}）{% endif %}</span>{% endif %}
 </div>
 {% else %}
 <div class="panel">
@@ -218,9 +220,9 @@
             <div class="form-group" style="min-width:190px;">
                 <label>判定结果</label>
                 <select name="result">
-                    <option value="confirmed_threat">确认威胁</option>
-                    <option value="false_positive">确认误报</option>
-                    <option value="baseline_updated">确认安全，更新基线</option>
+                    <option value="confirmed_threat">确认威胁（告警保持进行中，持续累计）</option>
+                    <option value="false_positive">确认误报（吸收该变化并更新基线，不再告警）</option>
+                    <option value="baseline_updated">确认安全，更新基线（告警解决）</option>
                 </select>
             </div>
             <div class="form-group grow">
