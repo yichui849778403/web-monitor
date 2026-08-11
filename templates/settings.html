@@ -40,7 +40,7 @@
                 <form method="POST">
                     <div class="form-group">
                         <label>全局请求间隔（秒）</label>
-                        <input type="number" name="global_request_interval" value="{{ config.global_request_interval }}" min="3" max="120">
+                        <input type="number" name="global_request_interval" value="{{ config.global_request_interval }}" min="3" max="3600">
                         <span class="form-hint">不同域名之间的默认请求间隔</span>
                     </div>
                     <div class="form-group">
