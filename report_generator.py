@@ -389,7 +389,7 @@ def _render_baseline_table(data):
 
 
 def _render_report_html(data, date, title_extra=None):
-    title = f'网站安全监测日报'
+    title = f'网页篡改与可用性监测日报'
     scope = title_extra if title_extra else '全部客户'
 
     total_customers = len(data)
@@ -599,7 +599,7 @@ def _render_report_html(data, date, title_extra=None):
         </div>
         <div>
             <div class="banner-title">{_esc(title)}</div>
-            <div class="banner-sub">Web Security Monitoring Daily Report</div>
+            <div class="banner-sub">Web Page Tampering &amp; Availability Monitoring Daily Report</div>
         </div>
         <div class="banner-meta">
             <div>监测范围：<strong>{_esc(scope)}</strong></div>
@@ -650,7 +650,7 @@ def _render_report_html(data, date, title_extra=None):
     </div>
 
     <div class="report-footer">
-        网站安全监测系统 · 本报告由系统自动生成<br>
+        网页篡改与可用性监测系统 · 本报告由系统自动生成<br>
         报告内容含人工审核结论，仅供内部安全工作参考
     </div>
 
