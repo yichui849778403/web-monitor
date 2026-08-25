@@ -45,10 +45,24 @@ def get_driver():
     return _driver
 
 
+def _disable_cache(driver):
+    """关闭浏览器 HTTP 缓存，确保每次检测都抓到服务器最新内容。
+
+    页面未返回 Cache-Control 时，Edge 会走启发式缓存返回旧副本，
+    导致篡改后的页面一直显示为原版。这里通过 CDP 禁用缓存根治。
+    """
+    try:
+        driver.execute_cdp_cmd('Network.enable', {})
+        driver.execute_cdp_cmd('Network.setCacheDisabled', {'cacheDisabled': True})
+    except Exception as e:
+        logger.warning(f'Disable browser cache failed: {e}')
+
+
 def take_screenshot(url, page_id, timestamp, wait_seconds=2):
     try:
         driver = get_driver()
         with _driver_lock:
+            _disable_cache(driver)
             driver.set_window_size(1920, 1080)
             driver.get(url)
             time.sleep(wait_seconds)
@@ -74,6 +88,7 @@ def fetch_rendered(url, wait_seconds=5):
     try:
         driver = get_driver()
         with _driver_lock:
+            _disable_cache(driver)
             driver.get(url)
             time.sleep(wait_seconds)
 
